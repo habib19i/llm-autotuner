@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.buildvenv/
+
+# Build output
+build/
+dist/
+*.spec
+
+# User data (created at runtime next to the app)
+models/
+cache/
+bin/
+logs/
+
+# Local tooling / old experiments
+_archive/

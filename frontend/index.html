@@ -1,0 +1,2068 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM Autotuner</title>
+<meta name="description" content="Hardware-aware local LLM deployment assistant.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230c0d0f'/%3E%3Cpolygon points='13 3 5 14 12 14 11 21 19 10 12 10 13 3' fill='%2322c55e'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ══════════════════════════════════════════
+   Design tokens
+══════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0c0d0f;--surface:#141518;--surface-2:#1b1d21;--surface-3:#22252b;
+  --border:#272a30;--border-2:#33373f;
+  --text:#e8e9eb;--text-2:#8b8f99;--text-3:#4d5160;
+  --shadow:0 8px 32px rgba(0,0,0,.55);--shadow-sm:0 2px 10px rgba(0,0,0,.35);
+  --green:#22c55e;--yellow:#d4a017;--orange:#e07b39;--red:#ef4444;
+  --gpu-bg:rgba(34,197,94,.10);--gpu-text:#22c55e;
+  --split-bg:rgba(212,160,23,.10);--split-text:#d4a017;
+  --cpu-bg:rgba(153,153,153,.08);--cpu-text:#888;
+  --font-ui:'Inter',system-ui,sans-serif;--font-mono:'JetBrains Mono','Fira Code',monospace;
+  --topbar-h:44px;--toolbar-h:44px;--detail-h:340px;--lbar-h:40px;
+  --radius-sm:5px;--radius-md:10px;--radius-lg:14px;--radius-xl:18px;
+}
+:root[data-theme="light"]{
+  --bg:#f2f3f5;--surface:#fff;--surface-2:#eef0f3;--surface-3:#e4e6ea;
+  --border:#dde0e6;--border-2:#c8ccd4;
+  --text:#0d0f12;--text-2:#4a4e5a;--text-3:#8b8f99;
+  --shadow:0 8px 32px rgba(0,0,0,.10);--shadow-sm:0 2px 10px rgba(0,0,0,.07);
+  --gpu-bg:rgba(21,128,61,.10);--gpu-text:#15803d;
+  --split-bg:rgba(180,130,10,.10);--split-text:#92630a;
+  --cpu-bg:rgba(100,100,100,.08);--cpu-text:#666;
+}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+  font-family:var(--font-ui);font-size:13px;line-height:1.4;-webkit-font-smoothing:antialiased;
+  transition:background .2s,color .2s}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:3px}
+
+/* ── TOP BAR — true 3-column grid so toggle is always centered ─── */
+#topbar{
+  position:fixed;top:0;left:0;right:0;height:var(--topbar-h);
+  background:var(--surface);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 16px;z-index:100;gap:12px;
+}
+.topbar-left{display:flex;align-items:center;gap:10px;overflow:hidden;min-width:0}
+.topbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.brand{font-weight:600;font-size:13.5px;color:var(--text);letter-spacing:-.3px;
+  white-space:nowrap;display:flex;align-items:center;gap:6px}
+.topbar-sep{color:var(--border-2);font-size:11px;flex-shrink:0}
+.demo-badge{font-size:10px;font-weight:600;font-family:var(--font-mono);
+  color:var(--yellow);background:rgba(212,160,23,.12);border:1px solid rgba(212,160,23,.25);
+  padding:2px 8px;border-radius:20px;letter-spacing:.04em;white-space:nowrap}
+.hw-chip{font-family:var(--font-mono);font-size:11px;color:var(--text-3);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
+.hw-chip.highlight{color:var(--gpu-text)}
+
+/* Mode toggle */
+.mode-toggle{position:relative;display:flex;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:20px;padding:3px;gap:0}
+.mode-toggle-pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);
+  background:var(--surface);border:1px solid var(--border-2);border-radius:16px;
+  pointer-events:none;transition:transform .22s cubic-bezier(.4,0,.2,1);box-shadow:var(--shadow-sm)}
+:root[data-theme="light"] .mode-toggle-pill{background:#fff}
+[data-active="pro"] .mode-toggle-pill{transform:translateX(100%)}
+.mode-btn{position:relative;z-index:1;background:transparent;border:none;color:var(--text-3);
+  font-size:12px;font-weight:500;font-family:var(--font-ui);padding:4px 16px;border-radius:16px;
+  cursor:pointer;transition:color .18s;flex:1;white-space:nowrap;text-align:center;}
+.mode-btn:hover{color:var(--text-2)}
+.mode-btn.active{color:var(--text);font-weight:600}
+
+/* Language toggle */
+.lang-toggle{position:relative;display:flex;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:16px;padding:2px;flex-shrink:0}
+.lang-pill{position:absolute;top:2px;bottom:2px;left:2px;width:calc(50% - 2px);
+  background:var(--surface);border:1px solid var(--border-2);border-radius:12px;
+  pointer-events:none;transition:transform .22s cubic-bezier(.4,0,.2,1);box-shadow:var(--shadow-sm)}
+:root[data-theme="light"] .lang-pill{background:#fff}
+[data-lang="zh"] .lang-pill{transform:translateX(100%)}
+.lang-btn{position:relative;z-index:1;background:transparent;border:none;color:var(--text-3);
+  font-size:11px;font-weight:500;font-family:var(--font-ui);padding:3px 10px;border-radius:12px;
+  cursor:pointer;transition:color .18s;flex:1;white-space:nowrap}
+.lang-btn:hover{color:var(--text-2)}
+.lang-btn.active{color:var(--text);font-weight:600}
+
+.icon-btn{display:flex;align-items:center;gap:5px;background:transparent;
+  border:1px solid var(--border);color:var(--text-2);font-size:12px;font-family:var(--font-ui);
+  padding:5px 10px;border-radius:var(--radius-sm);cursor:pointer;white-space:nowrap;
+  transition:background .12s,border-color .12s,color .12s}
+.icon-btn:hover{background:var(--surface-2);border-color:var(--border-2);color:var(--text)}
+
+/* ── SIMPLE VIEW ─── */
+#simple-view{position:fixed;top:var(--topbar-h);left:0;right:0;bottom:0;
+  overflow-y:auto;display:flex;flex-direction:column;background:var(--bg)}
+.wz-progress-bar{flex-shrink:0;display:flex;justify-content:center;
+  padding:20px 24px 0;border-bottom:1px solid var(--border);background:var(--surface)}
+.wz-steps-row{display:flex;align-items:flex-start;padding-bottom:16px;max-width:540px;width:100%}
+.wz-step-item{display:flex;flex-direction:column;align-items:center;gap:6px;flex-shrink:0}
+.wz-node{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--border-2);
+  background:var(--surface-2);display:flex;align-items:center;justify-content:center;
+  transition:all .25s ease}
+.wz-node-num{font-size:11px;font-weight:600;font-family:var(--font-mono);color:var(--text-3)}
+.wz-node-check{font-size:11px;font-weight:700;color:var(--bg);display:none}
+.wz-node.done{background:var(--text);border-color:var(--text)}
+.wz-node.done .wz-node-num{display:none}
+.wz-node.done .wz-node-check{display:block}
+.wz-node.active{border-color:var(--text);background:var(--surface);box-shadow:0 0 0 3px rgba(232,233,235,.12)}
+:root[data-theme="light"] .wz-node.active{box-shadow:0 0 0 3px rgba(13,15,18,.08)}
+.wz-node.active .wz-node-num{color:var(--text)}
+.wz-node-label{font-size:10px;font-weight:500;color:var(--text-3);white-space:nowrap;transition:color .2s}
+.wz-step-item:has(.wz-node.done) .wz-node-label{color:var(--text-2)}
+.wz-step-item:has(.wz-node.active) .wz-node-label{color:var(--text);font-weight:600}
+.wz-connector{flex:1;height:1.5px;background:var(--border);margin:13px 6px 0;border-radius:1px;min-width:20px}
+
+.wizard-step{flex:1;display:flex;align-items:flex-start;justify-content:center;
+  padding:48px 24px 80px;animation:wz-enter .3s cubic-bezier(.16,1,.3,1) both}
+@keyframes wz-enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+.wz-center-panel{width:100%;max-width:480px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--radius-xl);padding:44px 40px;box-shadow:var(--shadow-sm);
+  display:flex;flex-direction:column;align-items:center;text-align:center}
+.wz-wide-panel{width:100%;max-width:740px}
+.wz-h1{font-size:26px;font-weight:700;color:var(--text);letter-spacing:-.04em;line-height:1.25;margin-bottom:12px}
+.wz-h2{font-size:19px;font-weight:650;color:var(--text);letter-spacing:-.025em;line-height:1.3;margin-bottom:10px}
+.wz-body{font-size:13.5px;color:var(--text-2);line-height:1.65;margin-bottom:28px;max-width:380px}
+.wz-footnote{font-size:11.5px;color:var(--text-3);margin-top:14px}
+.wz-link{color:var(--text-3);font-size:12.5px;text-decoration:none;border-bottom:1px solid transparent;
+  transition:color .15s,border-color .15s}
+.wz-link:hover{color:var(--text-2);border-bottom-color:var(--border-2)}
+.wz-section-header{text-align:center;margin-bottom:28px}
+.wz-section-header .wz-body{margin:0 auto}
+.wz-hero-icon{width:52px;height:52px;border-radius:14px;background:var(--surface-2);
+  border:1px solid var(--border-2);display:flex;align-items:center;justify-content:center;
+  color:var(--text);margin-bottom:22px;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
+
+.wz-cta-btn{display:inline-flex;align-items:center;gap:8px;background:var(--text);
+  color:var(--bg);border:none;font-size:14px;font-weight:600;font-family:var(--font-ui);
+  padding:13px 24px;border-radius:var(--radius-md);cursor:pointer;width:100%;
+  justify-content:center;transition:opacity .15s,transform .12s;letter-spacing:-.01em}
+.wz-cta-btn svg{transition:transform .18s ease}
+.wz-cta-btn:hover{opacity:.9;transform:translateY(-1px)}
+.wz-cta-btn:hover svg{transform:translateX(3px)}
+.wz-cta-btn:active{transform:translateY(0)}
+
+.wz-primary-btn{display:inline-flex;align-items:center;gap:8px;background:var(--text);
+  color:var(--bg);border:none;font-size:13.5px;font-weight:600;font-family:var(--font-ui);
+  padding:11px 22px;border-radius:var(--radius-md);cursor:pointer;width:100%;
+  justify-content:center;transition:opacity .15s,transform .12s}
+.wz-primary-btn svg{transition:transform .18s ease}
+.wz-primary-btn:hover{opacity:.9;transform:translateY(-1px)}
+.wz-primary-btn:hover svg{transform:translateX(3px)}
+
+.wz-ghost-btn{background:transparent;border:none;color:var(--text-3);font-size:12.5px;
+  font-family:var(--font-ui);padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer;
+  margin-top:8px;transition:color .15s,background .15s}
+.wz-ghost-btn:hover{color:var(--text-2);background:var(--surface-2)}
+
+/* Scan step */
+.wz-scan-header{display:flex;align-items:center;gap:14px;margin-bottom:24px;width:100%;justify-content:center}
+.wz-scan-spinner{width:16px;height:16px;border:2px solid var(--border-2);
+  border-top-color:var(--text);border-radius:50%;animation:spin .75s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.wz-scan-list{display:flex;flex-direction:column;width:100%;
+  border:1px solid var(--border);border-radius:var(--radius-md);overflow:hidden;background:var(--surface-2)}
+.wz-scan-row{display:grid;grid-template-columns:20px 1fr auto;align-items:center;
+  gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);transition:background .2s}
+.wz-scan-row:last-child{border-bottom:none}
+.wz-scan-row.row-done{background:rgba(34,197,94,.04)}
+:root[data-theme="light"] .wz-scan-row.row-done{background:rgba(21,128,61,.04)}
+.scan-dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--border-2);
+  background:transparent;transition:all .3s ease;flex-shrink:0}
+.scan-dot.running{border-color:var(--text-2);border-top-color:transparent;animation:spin .7s linear infinite}
+.scan-dot.done{background:var(--green);border-color:var(--green);box-shadow:0 0 5px rgba(34,197,94,.4)}
+.wz-scan-label{font-size:13px;color:var(--text-2);font-weight:500;text-align:left}
+.wz-scan-val{font-family:var(--font-mono);font-size:11px;color:var(--text-3);text-align:right;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wz-scan-row.row-done .wz-scan-label{color:var(--text)}
+.wz-scan-row.row-done .wz-scan-val{color:var(--text-2)}
+
+/* Hardware step */
+.wz-hw-headline-row{display:flex;align-items:flex-start;gap:14px;width:100%;margin-bottom:20px;text-align:left}
+.wz-hw-emoji{font-size:28px;line-height:1;flex-shrink:0;margin-top:2px}
+.wz-hw-headline-row .wz-h2{text-align:left}
+.wz-hw-headline-row .wz-body{text-align:left;margin-bottom:0;max-width:100%;font-size:13px}
+.wz-hw-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;margin-bottom:20px}
+.wz-hw-card{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);
+  padding:12px 14px;display:flex;flex-direction:column;gap:5px;text-align:left}
+.wz-hw-label{font-size:9px;font-family:var(--font-mono);font-weight:500;color:var(--text-3);
+  text-transform:uppercase;letter-spacing:.1em}
+.wz-hw-val{font-size:12.5px;font-weight:500;color:var(--text);line-height:1.3;font-family:var(--font-mono)}
+.hw-override-link{display:block;text-align:center;font-size:11.5px;color:var(--text-3);
+  text-decoration:none;margin-top:14px;cursor:pointer;border-bottom:1px solid transparent;
+  transition:color .15s,border-color .15s;width:fit-content;align-self:center}
+.hw-override-link:hover{color:var(--text-2);border-bottom-color:var(--border-2)}
+
+/* Persona grid */
+.wz-persona-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:560px){.wz-persona-grid{grid-template-columns:1fr}}
+.persona-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:16px 18px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:14px;
+  transition:border-color .18s,background .18s,transform .14s,box-shadow .18s;box-shadow:var(--shadow-sm)}
+.persona-card:hover{border-color:var(--border-2);background:var(--surface-2);transform:translateY(-2px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.persona-card.selected{border-color:var(--text);background:var(--surface-2);box-shadow:0 0 0 1px var(--text)}
+.pc-icon-box{width:36px;height:36px;border-radius:9px;background:var(--surface-3);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  color:var(--text-2);flex-shrink:0;transition:color .2s,background .2s}
+.persona-card:hover .pc-icon-box,.persona-card.selected .pc-icon-box{color:var(--text)}
+.pc-text{display:flex;flex-direction:column;gap:3px}
+.pc-title{font-size:13px;font-weight:600;color:var(--text)}
+.pc-desc{font-size:11.5px;color:var(--text-3);line-height:1.4}
+
+/* Rec cards */
+.rec-cards{display:flex;flex-direction:column;gap:12px}
+.rec-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:20px 22px;display:flex;flex-direction:column;gap:10px;position:relative;overflow:hidden;
+  transition:border-color .18s,transform .14s,box-shadow .18s;box-shadow:var(--shadow-sm)}
+.rec-card::before{content:'';position:absolute;top:0;left:0;width:3px;height:100%;
+  background:var(--border-2);transition:background .2s}
+.rec-card:hover{border-color:var(--border-2);transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
+.rec-card.rec-top{border-color:rgba(34,197,94,.25)}
+.rec-card.rec-top::before{background:var(--green)}
+.rc-header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.rc-fit-badge{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:600;
+  font-family:var(--font-mono);letter-spacing:.03em;padding:3px 9px;border-radius:20px;
+  border:1px solid var(--border);background:var(--surface-2);color:var(--text-2)}
+.rc-fit-badge .fit-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.rc-fit-badge.Perfect{color:var(--green);border-color:rgba(34,197,94,.3);background:rgba(34,197,94,.07)}
+.rc-fit-badge.Perfect .fit-dot{background:var(--green);box-shadow:0 0 6px var(--green)}
+.rc-fit-badge.Good{color:var(--yellow)}.rc-fit-badge.Marginal{color:var(--orange)}
+.rc-rank{font-size:11px;font-weight:500;color:var(--text-3)}
+.rc-name{font-size:16px;font-weight:700;color:var(--text);letter-spacing:-.02em}
+.rc-tagline{font-size:12.5px;color:var(--text-2);line-height:1.5}
+.rc-meta{display:flex;gap:6px;flex-wrap:wrap}
+.rc-meta-item{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;color:var(--text-3);
+  font-family:var(--font-mono);background:var(--surface-2);border:1px solid var(--border);
+  border-radius:5px;padding:3px 8px}
+.rc-meta-item strong{color:var(--text-2);font-weight:500}
+.rc-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.rc-btn-download{background:var(--text);color:var(--bg);border:none;font-size:12.5px;font-weight:600;
+  font-family:var(--font-ui);padding:9px 18px;border-radius:var(--radius-sm);cursor:pointer;
+  transition:opacity .15s,transform .12s}
+.rc-btn-download:hover{opacity:.9;transform:translateY(-1px)}
+.rc-btn-hf{background:transparent;color:var(--text-3);border:1px solid var(--border);font-size:12.5px;
+  font-family:var(--font-ui);padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;transition:color .15s,border-color .15s,background .15s}
+.rc-btn-hf:hover{color:var(--text-2);border-color:var(--border-2);background:var(--surface-2)}
+
+/* Download step */
+.wz-dl-icon{width:52px;height:52px;border-radius:14px;background:var(--surface-2);
+  border:1px solid var(--border);display:flex;align-items:center;justify-content:center;
+  color:var(--text-2);margin-bottom:18px;animation:dl-pulse 2.5s ease-in-out infinite}
+@keyframes dl-pulse{0%,100%{box-shadow:0 0 0 0 rgba(232,233,235,0)}50%{box-shadow:0 0 0 6px rgba(232,233,235,.05)}}
+.wz-dl-title{font-size:18px;font-weight:700;color:var(--text);letter-spacing:-.02em;margin-bottom:4px}
+.wz-dl-subtitle{font-size:12.5px;color:var(--text-3);margin-bottom:20px}
+.wz-dl-progress{width:100%;margin-bottom:20px}
+.wz-dl-track{height:4px;background:var(--surface-2);border:1px solid var(--border);
+  border-radius:3px;overflow:hidden;margin-bottom:12px}
+.wz-dl-fill{height:100%;background:var(--text);border-radius:3px;transition:width .4s ease;width:0%}
+.wz-dl-stats{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.wz-dl-badge{font-size:11px;font-family:var(--font-mono);color:var(--text-3);
+  background:var(--surface-2);border:1px solid var(--border);padding:3px 9px;border-radius:5px;min-width:60px;text-align:center}
+.wz-dl-badge.highlight{color:var(--text-2)}
+
+/* Done step */
+.wz-done-icon{width:60px;height:60px;border-radius:50%;background:rgba(34,197,94,.1);
+  border:1.5px solid rgba(34,197,94,.3);display:flex;align-items:center;justify-content:center;
+  color:var(--green);margin-bottom:20px}
+
+/* API Credentials */
+.api-creds{width:100%;margin-top:24px;padding-top:20px;border-top:1px solid var(--border)}
+.api-creds-header{font-size:11px;font-weight:600;color:var(--text-2);letter-spacing:.04em;
+  text-transform:uppercase;font-family:var(--font-mono);margin-bottom:6px}
+.api-creds-desc{font-size:12px;color:var(--text-3);line-height:1.55;margin-bottom:14px}
+.cred-row{display:flex;align-items:center;gap:0;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;margin-bottom:8px}
+.cred-label{font-size:10.5px;font-family:var(--font-mono);color:var(--text-3);
+  padding:9px 10px;border-right:1px solid var(--border);white-space:nowrap;background:var(--surface-3);
+  min-width:82px;text-align:center}
+.cred-value{font-size:11.5px;font-family:var(--font-mono);color:var(--text-2);
+  padding:9px 10px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cred-copy{background:transparent;border:none;border-left:1px solid var(--border);
+  color:var(--text-3);font-size:11px;font-family:var(--font-ui);padding:9px 12px;cursor:pointer;
+  white-space:nowrap;transition:color .15s,background .15s;flex-shrink:0}
+.cred-copy:hover{color:var(--text);background:var(--surface-3)}
+.cred-copy.copied{color:var(--green)}
+
+/* Hardware override modal form */
+.hw-form{display:flex;flex-direction:column;gap:10px;margin-bottom:16px;text-align:left}
+.hw-form-row{display:flex;flex-direction:column;gap:4px}
+.hw-form-label{font-size:11px;font-weight:500;color:var(--text-3);letter-spacing:.02em}
+.hw-form-input{background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+  font-family:var(--font-mono);font-size:12.5px;padding:8px 11px;border-radius:var(--radius-sm);
+  outline:none;width:100%;transition:border-color .12s}
+.hw-form-input::placeholder{color:var(--text-3)}
+.hw-form-input:focus{border-color:var(--border-2)}
+
+/* ── PRO MODE ─── */
+#pro-view{position:fixed;top:var(--topbar-h);left:0;right:0;bottom:0;display:flex;flex-direction:column}
+#pro-view.hidden{display:none}
+#toolbar{height:var(--toolbar-h);background:var(--bg);border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;padding:0 16px;gap:16px;flex-shrink:0;overflow-x:auto}
+.toolbar-left{display:flex;align-items:center;gap:12px;flex:1;overflow:hidden}
+.toolbar-right{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.search-wrap{position:relative;flex-shrink:0}
+.search-icon{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--text-3);pointer-events:none}
+#search{background:var(--surface);border:1px solid var(--border);color:var(--text);
+  font-family:var(--font-ui);font-size:12.5px;padding:5px 10px 5px 30px;
+  border-radius:var(--radius-sm);width:200px;outline:none;transition:border-color .12s}
+#search::placeholder{color:var(--text-3)}
+#search:focus{border-color:var(--border-2)}
+.filter-group{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.filter-label{font-size:11px;color:var(--text-3);padding-right:2px;white-space:nowrap}
+.chip{background:transparent;border:1px solid var(--border);color:var(--text-3);font-size:11.5px;
+  font-family:var(--font-ui);padding:3px 9px;border-radius:20px;cursor:pointer;white-space:nowrap;transition:all .12s}
+.chip:hover{background:var(--surface-2);color:var(--text-2);border-color:var(--border-2)}
+.chip.active{background:var(--surface-2);border-color:var(--border-2);color:var(--text)}
+.model-count{font-size:11.5px;color:var(--text-3);font-family:var(--font-mono)}
+#table-wrap{flex:1;overflow-y:auto;overflow-x:auto}
+#table-wrap.detail-open{max-height:calc(100% - var(--detail-h))}
+#model-table{width:100%;min-width:900px;border-collapse:collapse;font-family:var(--font-mono);font-size:12px}
+#model-table thead tr{position:sticky;top:0;z-index:10}
+#model-table th{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 10px;
+  text-align:left;font-size:11px;font-weight:500;color:var(--text-3);white-space:nowrap;user-select:none}
+#model-table th.sortable{cursor:pointer}
+#model-table th.sortable:hover{color:var(--text-2)}
+#model-table th.active-col{color:var(--text-2)}
+.sort-arrow{font-size:10px;margin-left:2px}
+#model-table tbody tr{border-bottom:1px solid var(--border);cursor:pointer;transition:background .08s}
+#model-table tbody tr:hover{background:var(--surface)}
+#model-table tbody tr.selected{background:var(--surface-2)}
+#model-table td{padding:7px 10px;white-space:nowrap;color:var(--text-2);vertical-align:middle}
+.loading-row td{text-align:center;padding:40px}
+.loading-text{color:var(--text-3);animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+.col-fit-dot{width:28px;padding-right:0!important}
+.col-name{min-width:220px;color:var(--text)!important;font-weight:500}
+.col-provider{min-width:90px}.col-params{min-width:65px;text-align:right}
+.col-score{min-width:64px;text-align:right}.col-toks{min-width:60px;text-align:right}
+.col-quant{min-width:76px}.col-mode{min-width:76px}.col-mem{min-width:56px;text-align:right}
+.col-ctx{min-width:52px;text-align:right}.col-fitlabel{min-width:76px}.col-usecase{min-width:86px}
+.score-cell{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.score-bar-wrap{width:32px;height:3px;background:var(--border);border-radius:2px;overflow:hidden}
+.score-bar-fill{height:100%;background:var(--text-3);border-radius:2px}
+.fit-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.fit-dot.Perfect{background:var(--green)}.fit-dot.Good{background:var(--yellow)}
+.fit-dot.Marginal{background:var(--orange)}.fit-dot.No-Fit{background:var(--red)}
+.fit-label{font-size:11px;font-weight:500}
+.fit-label.Perfect{color:var(--green)}.fit-label.Good{color:var(--yellow)}
+.fit-label.Marginal{color:var(--orange)}.fit-label.No-Fit{color:var(--red)}
+.mode-chip{font-size:10px;font-weight:500;padding:2px 6px;border-radius:var(--radius-sm);display:inline-block}
+.mode-chip.GPU{background:var(--gpu-bg);color:var(--gpu-text)}
+.mode-chip.CPU-GPU{background:var(--split-bg);color:var(--split-text)}
+.mode-chip.CPU{background:var(--cpu-bg);color:var(--cpu-text)}
+.mem-perfect{color:var(--green)}.mem-good{color:var(--yellow)}.mem-tight{color:var(--orange)}.mem-over{color:var(--red)}
+.uc-tag{font-size:10px;color:var(--text-3);border:1px solid var(--border);padding:1px 5px;border-radius:var(--radius-sm);display:inline-block}
+.moe-badge{font-size:9px;color:var(--text-3);border:1px solid var(--border);padding:1px 3px;border-radius:2px;vertical-align:middle;margin-left:3px}
+#detail-panel{height:var(--detail-h);background:var(--surface);border-top:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;flex-shrink:0}
+#detail-panel.hidden{display:none}
+.detail-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.detail-name{font-size:14px;font-weight:600;color:var(--text)}
+.detail-meta{font-family:var(--font-mono);font-size:11px;color:var(--text-3);margin-top:2px}
+.detail-section{display:flex;align-items:center;gap:8px;padding:7px 16px;border-bottom:1px solid var(--border);flex-shrink:0}
+.detail-section-label{font-size:11px;color:var(--text-3);white-space:nowrap}
+.persona-chips{display:flex;gap:6px;flex-wrap:wrap}
+.pchip{background:transparent;border:1px solid var(--border);color:var(--text-3);font-size:11.5px;
+  font-family:var(--font-ui);padding:3px 10px;border-radius:20px;cursor:pointer;transition:all .12s}
+.pchip:hover{background:var(--surface-2);color:var(--text-2);border-color:var(--border-2)}
+.pchip.active{background:var(--surface-2);border-color:#444;color:var(--text)}
+.stats-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;padding:10px 16px;flex-shrink:0}
+@media(max-width:1100px){.stats-grid{grid-template-columns:repeat(4,1fr)}}
+.stat-box{background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);padding:7px 10px}
+.stat-label{display:block;font-size:10px;color:var(--text-3);margin-bottom:4px;text-transform:uppercase;letter-spacing:.5px}
+.stat-val{display:block;font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--text)}
+.bench-row{display:flex;gap:20px;padding:6px 16px;flex-shrink:0;overflow-x:auto}
+.bench-item{display:flex;flex-direction:column;gap:3px;flex-shrink:0}
+.bench-label{font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px}
+.bench-val{font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--text-2)}
+.why-block{padding:5px 16px;flex-shrink:0}
+.why-label{display:block;font-size:10px;color:var(--text-3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.why-text{font-size:12px;color:var(--text-2);line-height:1.55}
+.action-row{display:flex;gap:8px;padding:8px 16px 10px;flex-shrink:0;align-items:center}
+.btn-primary{background:var(--text);color:var(--bg);border:none;font-size:12.5px;font-weight:600;
+  font-family:var(--font-ui);padding:7px 16px;border-radius:var(--radius-sm);cursor:pointer;transition:opacity .12s;white-space:nowrap}
+.btn-primary:hover:not(:disabled){opacity:.88}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed}
+.btn-secondary{background:transparent;color:var(--text-2);border:1px solid var(--border);font-size:12.5px;
+  font-family:var(--font-ui);padding:6px 14px;border-radius:var(--radius-sm);cursor:pointer;transition:background .12s,color .12s;white-space:nowrap}
+.btn-secondary:hover:not(:disabled){background:var(--surface-2);color:var(--text)}
+.btn-secondary:disabled{opacity:.35;cursor:not-allowed}
+.btn-ghost{color:var(--text-3);font-size:12px;font-family:var(--font-ui);text-decoration:none;padding:6px 4px;transition:color .12s}
+.btn-ghost:hover{color:var(--text-2)}
+.progress-block{padding:0 16px 8px;flex-shrink:0}
+.progress-block.hidden{display:none}
+.progress-info{display:flex;justify-content:space-between;font-size:11.5px;color:var(--text-2);margin-bottom:5px;font-family:var(--font-mono)}
+.progress-bar-wrap{height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-bottom:5px}
+.progress-bar-fill{height:100%;background:var(--green);border-radius:2px;transition:width .3s}
+.progress-meta{display:flex;gap:16px;font-size:11px;color:var(--text-3);font-family:var(--font-mono)}
+
+/* Modals */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;
+  justify-content:center;z-index:200;backdrop-filter:blur(3px)}
+:root[data-theme="light"] .modal-overlay{background:rgba(0,0,0,.22)}
+.modal-overlay.hidden{display:none}
+.modal-box{background:var(--surface);border:1px solid var(--border-2);border-radius:var(--radius-lg);
+  width:100%;max-width:460px;padding:22px;box-shadow:var(--shadow);animation:wz-enter .2s ease}
+.modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.modal-title{font-size:15px;font-weight:600;color:var(--text)}
+.modal-desc{font-size:12px;color:var(--text-3);margin-bottom:16px;line-height:1.5}
+.quant-list{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;max-height:280px;overflow-y:auto}
+.quant-item{display:flex;align-items:center;justify-content:space-between;background:var(--surface-2);
+  border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;
+  cursor:pointer;transition:border-color .12s,background .12s;gap:12px}
+.quant-item:hover{border-color:var(--border-2);background:var(--surface-3)}
+.qi-left{display:flex;flex-direction:column;gap:3px}
+.qi-name{font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--text)}
+.qi-quality{font-size:11px;color:var(--text-3)}
+.qi-right{display:flex;flex-direction:column;align-items:flex-end;gap:3px}
+.qi-size{font-family:var(--font-mono);font-size:13px;color:var(--text-2)}
+.qi-dl-btn{background:var(--text);color:var(--bg);border:none;font-size:11.5px;font-weight:600;
+  font-family:var(--font-ui);padding:5px 12px;border-radius:var(--radius-sm);cursor:pointer;transition:opacity .12s}
+.qi-dl-btn:hover{opacity:.88}
+.modal-note{font-size:11.5px;color:var(--text-3);line-height:1.5}
+
+#launch-bar{position:fixed;bottom:0;left:0;right:0;height:var(--lbar-h);
+  background:rgba(34,197,94,.08);border-top:1px solid rgba(34,197,94,.2);
+  display:flex;align-items:center;justify-content:space-between;padding:0 16px;z-index:90}
+#launch-bar.hidden{display:none}
+.launch-bar-left{display:flex;align-items:center;gap:10px;font-family:var(--font-mono);font-size:12px;color:var(--green)}
+.running-dot{width:7px;height:7px;background:var(--green);border-radius:50%;animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.lbar-pid{font-size:11px;color:rgba(34,197,94,.6)}
+.btn-stop{background:rgba(239,68,68,.12);color:var(--red);border:1px solid rgba(239,68,68,.25);
+  font-size:12px;font-family:var(--font-ui);padding:5px 14px;border-radius:var(--radius-sm);cursor:pointer;transition:background .12s}
+.btn-stop:hover{background:rgba(239,68,68,.22)}
+.hidden{display:none!important}
+.mode-chip.No-Fit{background:rgba(239,68,68,.08);color:var(--red)}
+.inst-badge{font-size:9px;color:var(--green);border:1px solid rgba(34,197,94,.35);padding:1px 4px;border-radius:3px;vertical-align:middle;margin-left:5px}
+.est{color:var(--text-3);font-size:10px;margin-left:2px}
+.btn-danger{background:transparent;color:var(--red);border:1px solid rgba(239,68,68,.3);font-size:12.5px;
+  font-family:var(--font-ui);padding:6px 14px;border-radius:var(--radius-sm);cursor:pointer;white-space:nowrap}
+.btn-danger:hover{background:rgba(239,68,68,.1)}
+.qi-tags{display:flex;gap:5px;flex-wrap:wrap}
+.qi-tag{font-size:9.5px;font-family:var(--font-mono);padding:1px 6px;border-radius:10px;border:1px solid var(--border-2);color:var(--text-3)}
+.qi-tag.rec{color:var(--green);border-color:rgba(34,197,94,.35)}
+.qi-tag.big{color:var(--orange);border-color:rgba(224,123,57,.35)}
+.qi-tag.inst{color:var(--text);border-color:var(--text-3)}
+.qi-dl-btn:disabled{opacity:.35;cursor:not-allowed}
+.lbar-open{color:var(--green);font-size:12px;font-family:var(--font-ui);text-decoration:none;border:1px solid rgba(34,197,94,.3);padding:4px 10px;border-radius:var(--radius-sm);margin-right:8px}
+.lbar-open:hover{background:rgba(34,197,94,.1)}
+.launch-bar-right{display:flex;align-items:center}
+.runtime-box{width:100%;margin-top:14px;padding:12px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-md);text-align:left;font-size:12px;color:var(--text-2);line-height:1.5}
+.runtime-box .wz-dl-track{margin:8px 0 0}
+.launch-state{font-size:12.5px;color:var(--text-2);margin-top:12px;min-height:18px;white-space:pre-wrap;text-align:center}
+.launch-state.ok{color:var(--green)}.launch-state.err{color:var(--red);text-align:left;font-family:var(--font-mono);font-size:11px}
+#toasts{position:fixed;right:16px;bottom:56px;display:flex;flex-direction:column;gap:8px;z-index:300;max-width:380px}
+.toast{background:var(--surface);border:1px solid var(--border-2);border-left:3px solid var(--text-3);color:var(--text);
+  padding:10px 14px;border-radius:var(--radius-sm);box-shadow:var(--shadow);font-size:12.5px;line-height:1.45;animation:wz-enter .2s ease;white-space:pre-wrap;word-break:break-word}
+.toast.error{border-left-color:var(--red)}.toast.ok{border-left-color:var(--green)}
+@media(max-width:700px){.hw-chip,[data-pro-only]{display:none!important}.wz-center-panel{padding:32px 20px}}
+</style>
+</head>
+<body>
+
+<!-- ══════════ TOP BAR ══════════ -->
+<header id="topbar">
+  <div class="topbar-left">
+    <span class="brand">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      LLM Autotuner
+    </span>
+    <span class="topbar-sep">|</span>
+    
+    <div class="mode-toggle" id="mode-toggle" data-active="simple">
+      <div class="mode-toggle-pill"></div>
+      <button class="mode-btn active" id="btn-simple-mode" data-i18n="mode-simple">Simple</button>
+      <button class="mode-btn" id="btn-pro-mode" data-i18n="mode-pro">Pro</button>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <span class="hw-chip" id="hw-cpu" data-pro-only style="display:none"></span>
+    <span class="topbar-sep" data-pro-only style="display:none">·</span>
+    <span class="hw-chip highlight" id="hw-gpu" data-pro-only style="display:none"></span>
+    <span class="topbar-sep" data-pro-only style="display:none">·</span>
+    <span class="hw-chip" id="hw-ram" data-pro-only style="display:none"></span>
+    <span class="topbar-sep" data-pro-only style="display:none">|</span>
+    <div class="lang-toggle" id="lang-toggle">
+      <div class="lang-pill"></div>
+      <button class="lang-btn active" id="btn-lang-en">EN</button>
+      <button class="lang-btn" id="btn-lang-zh">中文</button>
+    </div>
+    <button class="icon-btn" id="btn-theme"><span id="theme-icon">☀️</span></button>
+  </div>
+</header>
+
+<!-- ══════════ SIMPLE VIEW ══════════ -->
+<div id="simple-view">
+  <!-- Step progress -->
+  <div class="wz-progress-bar">
+    <div class="wz-steps-row">
+      <div class="wz-step-item">
+        <div class="wp-label wz-node" data-step="1"><span class="wz-node-num">1</span><span class="wz-node-check">✓</span></div>
+        <span class="wz-node-label" data-i18n="step-1">Scan</span>
+      </div>
+      <div class="wz-connector"></div>
+      <div class="wz-step-item">
+        <div class="wp-label wz-node" data-step="2"><span class="wz-node-num">2</span><span class="wz-node-check">✓</span></div>
+        <span class="wz-node-label" data-i18n="step-2">Hardware</span>
+      </div>
+      <div class="wz-connector"></div>
+      <div class="wz-step-item">
+        <div class="wp-label wz-node" data-step="3"><span class="wz-node-num">3</span><span class="wz-node-check">✓</span></div>
+        <span class="wz-node-label" data-i18n="step-3">Workflow</span>
+      </div>
+      <div class="wz-connector"></div>
+      <div class="wz-step-item">
+        <div class="wp-label wz-node" data-step="4"><span class="wz-node-num">4</span><span class="wz-node-check">✓</span></div>
+        <span class="wz-node-label" data-i18n="step-4">Models</span>
+      </div>
+      <div class="wz-connector"></div>
+      <div class="wz-step-item">
+        <div class="wp-label wz-node" data-step="5"><span class="wz-node-num">5</span><span class="wz-node-check">✓</span></div>
+        <span class="wz-node-label" data-i18n="step-5">Deploy</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 0: Welcome -->
+  <div class="wizard-step" id="step-welcome">
+    <div class="wz-center-panel">
+      <div class="wz-hero-icon">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      </div>
+      <h1 class="wz-h1" data-i18n="welcome-h1">Deploy a local AI model matched to your hardware.</h1>
+      <p class="wz-body" data-i18n="welcome-body">System scan selects optimal model size and quantization for your configuration.</p>
+      <button class="wz-cta-btn" id="btn-scan">
+        <span data-i18n="welcome-cta">Scan System</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+      <p class="wz-footnote" data-i18n="welcome-note">Ready to scan hardware</p>
+    </div>
+  </div>
+
+  <!-- Step 1: Scanning -->
+  <div class="wizard-step hidden" id="step-scanning">
+    <div class="wz-center-panel">
+      <div class="wz-scan-header">
+        <div class="wz-scan-spinner"></div>
+        <h2 class="wz-h2" data-i18n="scan-title">Scanning system…</h2>
+      </div>
+      <div class="wz-scan-list">
+        <div class="wz-scan-row" id="scan-cpu">
+          <span class="scan-dot"></span>
+          <span class="wz-scan-label" data-i18n="scan-cpu">Processor</span>
+          <span class="wz-scan-val" id="scan-cpu-val"></span>
+        </div>
+        <div class="wz-scan-row" id="scan-ram">
+          <span class="scan-dot"></span>
+          <span class="wz-scan-label" data-i18n="scan-ram">System memory</span>
+          <span class="wz-scan-val" id="scan-ram-val"></span>
+        </div>
+        <div class="wz-scan-row" id="scan-gpu">
+          <span class="scan-dot"></span>
+          <span class="wz-scan-label" data-i18n="scan-gpu">GPU</span>
+          <span class="wz-scan-val" id="scan-gpu-val"></span>
+        </div>
+        <div class="wz-scan-row" id="scan-models">
+          <span class="scan-dot"></span>
+          <span class="wz-scan-label" data-i18n="scan-models">Model index</span>
+          <span class="wz-scan-val" id="scan-models-val"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Hardware -->
+  <div class="wizard-step hidden" id="step-hardware">
+    <div class="wz-center-panel">
+      <div class="wz-hw-headline-row">
+        <span id="hw-result-icon" style="font-size:28px;line-height:1;flex-shrink:0;margin-top:2px">⚡</span>
+        <div>
+          <h2 class="wz-h2" id="hw-headline">Configuration detected.</h2>
+          <p class="wz-body" id="hw-summary" style="margin-bottom:0;font-size:13px"></p>
+        </div>
+      </div>
+      <div class="wz-hw-grid">
+        <div class="wz-hw-card"><span class="wz-hw-label" data-i18n="hw-label-cpu">CPU</span><span class="wz-hw-val" id="hc-cpu"></span></div>
+        <div class="wz-hw-card"><span class="wz-hw-label" data-i18n="hw-label-gpu">GPU</span><span class="wz-hw-val" id="hc-gpu"></span></div>
+        <div class="wz-hw-card"><span class="wz-hw-label" data-i18n="hw-label-vram">VRAM</span><span class="wz-hw-val" id="hc-vram"></span></div>
+        <div class="wz-hw-card"><span class="wz-hw-label" data-i18n="hw-label-ram">SYSTEM RAM</span><span class="wz-hw-val" id="hc-ram"></span></div>
+      </div>
+      <button class="wz-primary-btn" id="btn-hw-continue">
+        <span data-i18n="hw-continue">Select workflow</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+      <a href="#" class="hw-override-link" id="btn-hw-override" data-i18n="hw-override-link">Hardware not detected correctly? Enter specs manually</a>
+    </div>
+  </div>
+
+  <!-- Step 3: Persona -->
+  <div class="wizard-step hidden" id="step-persona">
+    <div class="wz-wide-panel">
+      <div class="wz-section-header">
+        <h2 class="wz-h2" data-i18n="persona-h2">Select a workflow.</h2>
+        <p class="wz-body" data-i18n="persona-body">Determines model family, context length, and quantization strategy.</p>
+      </div>
+      <div class="wz-persona-grid">
+        <button class="persona-card" data-persona="coding">
+          <div class="pc-icon-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+          <div class="pc-text"><span class="pc-title" data-i18n="p-coding-title">Code generation</span><span class="pc-desc" data-i18n="p-coding-desc">Write, explain, and debug in any language</span></div>
+        </button>
+        <button class="persona-card" data-persona="general">
+          <div class="pc-icon-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+          <div class="pc-text"><span class="pc-title" data-i18n="p-general-title">General assistant</span><span class="pc-desc" data-i18n="p-general-desc">Instruction following, Q&amp;A, summarization</span></div>
+        </button>
+        <button class="persona-card" data-persona="vision">
+          <div class="pc-icon-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></div>
+          <div class="pc-text"><span class="pc-title" data-i18n="p-vision-title">Vision and document analysis</span><span class="pc-desc" data-i18n="p-vision-desc">Multimodal inputs, OCR, image captioning</span></div>
+        </button>
+        <button class="persona-card" data-persona="stem">
+          <div class="pc-icon-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div>
+          <div class="pc-text"><span class="pc-title" data-i18n="p-stem-title">Reasoning and research</span><span class="pc-desc" data-i18n="p-stem-desc">Chain-of-thought, STEM, structured proofs</span></div>
+        </button>
+        <button class="persona-card" data-persona="story">
+          <div class="pc-icon-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+          <div class="pc-text"><span class="pc-title" data-i18n="p-story-title">Long-form writing</span><span class="pc-desc" data-i18n="p-story-desc">Extended context, document drafting</span></div>
+        </button>
+        <button class="persona-card" data-persona="instruction">
+          <div class="pc-icon-box"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><polyline points="3 6 4 7 6 5"/><polyline points="3 12 4 13 6 11"/><polyline points="3 18 4 19 6 17"/></svg></div>
+          <div class="pc-text"><span class="pc-title" data-i18n="p-instruction-title">Instruction following</span><span class="pc-desc" data-i18n="p-instruction-desc">Structured prompt compliance, agentic tasks</span></div>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Recs -->
+  <div class="wizard-step hidden" id="step-recs">
+    <div class="wz-wide-panel">
+      <div class="wz-section-header">
+        <h2 class="wz-h2" data-i18n="recs-h2">Recommended models</h2>
+        <p class="wz-body" id="recs-subtitle"></p>
+      </div>
+      <div class="rec-cards" id="rec-cards"></div>
+      <p class="wz-footnote" style="text-align:center;margin-top:18px">
+        <a class="wz-link" id="btn-view-all" href="#" data-i18n="recs-browse">View all models in Pro →</a>
+      </p>
+      <p class="wz-footnote" style="text-align:center;margin-top:10px">
+        <a class="wz-link" id="btn-change-workflow" href="#" style="font-size:11.5px;color:var(--text-3)" data-i18n="recs-back">← Change workflow</a>
+      </p>
+    </div>
+  </div>
+
+  <!-- Step 5: Downloading -->
+  <div class="wizard-step hidden" id="step-download">
+    <div class="wz-center-panel">
+      <div class="wz-dl-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </div>
+      <div class="wz-dl-title" id="dl-model-name">Downloading…</div>
+      <div class="wz-dl-subtitle" id="dl-size-info"></div>
+      <div class="wz-dl-progress">
+        <div class="wz-dl-track"><div class="wz-dl-fill" id="dl-bar-fill"></div></div>
+        <div class="wz-dl-stats">
+          <span class="wz-dl-badge highlight" id="dl-pct">0%</span>
+          <span class="wz-dl-badge" id="dl-speed"></span>
+          <span class="wz-dl-badge" id="dl-eta"></span>
+        </div>
+      </div>
+      <button class="wz-ghost-btn" id="btn-cancel-dl" data-i18n="dl-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Step 6: Done + API credentials -->
+  <div class="wizard-step hidden" id="step-done">
+    <div class="wz-center-panel" style="max-width:520px">
+      <div class="wz-done-icon">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <h2 class="wz-h2" data-i18n="done-h2">Ready to deploy.</h2>
+      <p class="wz-body" id="done-model-name" style="margin-bottom:14px"></p>
+      <button class="wz-cta-btn" id="btn-wizard-launch">
+        <span data-i18n="done-cta">Launch</span>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+      <div class="runtime-box hidden" id="runtime-box">
+        <span id="runtime-text"></span>
+        <div class="wz-dl-track hidden" id="runtime-track"><div class="wz-dl-fill" id="runtime-fill"></div></div>
+      </div>
+      <div class="launch-state" id="launch-state"></div>
+      <button class="wz-ghost-btn" id="btn-pick-again" data-i18n="done-ghost">Select a different model</button>
+
+      <!-- Local API credentials -->
+      <div class="api-creds" id="api-creds">
+        <div class="api-creds-header" data-i18n="api-creds-header">Local API connection</div>
+        <p class="api-creds-desc" data-i18n="api-creds-desc">Connect to VS Code, Cursor, Obsidian, or Open WebUI using these credentials once the model is running.</p>
+        <div class="cred-row">
+          <span class="cred-label">Base URL</span>
+          <code class="cred-value" id="cred-url">http://127.0.0.1:8080/v1</code>
+          <button class="cred-copy" id="cred-url-copy" data-copy="http://127.0.0.1:8080/v1" data-i18n-copy="copy-btn">Copy</button>
+        </div>
+        <div class="cred-row">
+          <span class="cred-label">Model</span>
+          <code class="cred-value" id="cred-model">—</code>
+          <button class="cred-copy" id="cred-model-copy" data-copy="" data-i18n-copy="copy-btn">Copy</button>
+        </div>
+        <div class="cred-row">
+          <span class="cred-label">API Key</span>
+          <code class="cred-value" id="cred-key">sk-local (any value works)</code>
+          <button class="cred-copy" data-copy="sk-local" data-i18n-copy="copy-btn">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PRO VIEW ══════════ -->
+<div id="pro-view" class="hidden">
+  <div id="toolbar">
+    <div class="toolbar-left">
+      <div class="search-wrap">
+        <svg class="search-icon" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="6.5" cy="6.5" r="5"/><line x1="10.5" y1="10.5" x2="15" y2="15"/></svg>
+        <input type="text" id="search" autocomplete="off" spellcheck="false" placeholder="Search models…" data-i18n-ph="search-placeholder">
+      </div>
+      <div class="filter-group" id="filter-provider"><span class="filter-label" data-i18n="filter-provider">Provider</span></div>
+      <div class="filter-group" id="filter-fit">
+        <span class="filter-label" data-i18n="filter-fit">Fit</span>
+        <button class="chip active" data-fit="all" data-i18n="chip-all">All</button>
+        <button class="chip" data-fit="Perfect" data-i18n="chip-perfect">Perfect</button>
+        <button class="chip" data-fit="Good" data-i18n="chip-good">Good</button>
+        <button class="chip" data-fit="Marginal" data-i18n="chip-marginal">Marginal</button>
+      </div>
+      <div class="filter-group" id="filter-usecase">
+        <span class="filter-label" data-i18n="filter-usecase">Use Case</span>
+        <button class="chip active" data-uc="all" data-i18n="chip-all">All</button>
+        <button class="chip" data-uc="Coding" data-i18n="chip-coding">Coding</button>
+        <button class="chip" data-uc="Chat" data-i18n="chip-chat">Chat</button>
+        <button class="chip" data-uc="Vision" data-i18n="chip-vision">Vision</button>
+        <button class="chip" data-uc="Reasoning" data-i18n="chip-reasoning">Reasoning</button>
+      </div>
+    </div>
+    <div class="toolbar-right"><span class="model-count" id="model-count"></span><button class="icon-btn" id="btn-refresh" title="Re-fetch the model catalog from HuggingFace">↻ <span data-i18n="btn-refresh">Refresh</span></button></div>
+  </div>
+  <div id="table-wrap">
+    <table id="model-table">
+      <thead><tr>
+        <th class="col-fit-dot"></th>
+        <th class="col-name sortable" data-col="name">Model <span class="sort-arrow"></span></th>
+        <th class="col-provider sortable" data-col="provider">Provider <span class="sort-arrow"></span></th>
+        <th class="col-params sortable" data-col="params_b">Params <span class="sort-arrow"></span></th>
+        <th class="col-score sortable" data-col="score">Score <span class="sort-arrow"></span></th>
+        <th class="col-toks sortable" data-col="tok_s">tok/s <span class="sort-arrow"></span></th>
+        <th class="col-quant">Quant</th>
+        <th class="col-mode">Mode</th>
+        <th class="col-mem sortable" data-col="mem_pct">Mem% <span class="sort-arrow"></span></th>
+        <th class="col-ctx sortable" data-col="ctx_k">Ctx <span class="sort-arrow"></span></th>
+        <th class="col-fitlabel sortable active-col" data-col="fit">Fit <span class="sort-arrow">↑</span></th>
+        <th class="col-usecase">Use Case</th>
+      </tr></thead>
+      <tbody id="table-body"><tr class="loading-row"><td colspan="12"><span class="loading-text">Loading…</span></td></tr></tbody>
+    </table>
+  </div>
+  <div id="detail-panel" class="hidden">
+    <div class="detail-header">
+      <div><div class="detail-name" id="detail-name"></div><div class="detail-meta" id="detail-meta"></div></div>
+      <button class="icon-btn" id="btn-close-detail">✕</button>
+    </div>
+    <div class="detail-section">
+      <span class="detail-section-label" data-i18n="detail-persona-label">Optimize for</span>
+      <div class="persona-chips">
+        <button class="pchip active" data-persona="general" data-i18n="pchip-general">General</button>
+        <button class="pchip" data-persona="coding" data-i18n="pchip-coding">Coding</button>
+        <button class="pchip" data-persona="vision" data-i18n="pchip-vision">Vision</button>
+        <button class="pchip" data-persona="stem" data-i18n="pchip-stem">STEM</button>
+        <button class="pchip" data-persona="story" data-i18n="pchip-story">Long-form</button>
+        <button class="pchip" data-persona="instruction" data-i18n="pchip-instruction">Instruction</button>
+      </div>
+    </div>
+    <div class="stats-grid">
+      <div class="stat-box"><span class="stat-label" data-i18n="stat-fit">Fit</span><span class="stat-val" id="d-fit"></span></div>
+      <div class="stat-box"><span class="stat-label" data-i18n="stat-mode">Mode</span><span class="stat-val" id="d-mode"></span></div>
+      <div class="stat-box"><span class="stat-label" data-i18n="stat-quant">Quant</span><span class="stat-val" id="d-quant"></span></div>
+      <div class="stat-box"><span class="stat-label" data-i18n="stat-toks">tok/s</span><span class="stat-val" id="d-toks"></span></div>
+      <div class="stat-box"><span class="stat-label" data-i18n="stat-mem">Mem</span><span class="stat-val" id="d-mem"></span></div>
+      <div class="stat-box"><span class="stat-label" data-i18n="stat-layers">GPU Layers</span><span class="stat-val" id="d-layers"></span></div>
+      <div class="stat-box"><span class="stat-label" data-i18n="stat-ctx">Context</span><span class="stat-val" id="d-ctx"></span></div>
+      <div class="stat-box"><span class="stat-label" data-i18n="stat-size">Size</span><span class="stat-val" id="d-size"></span></div>
+    </div>
+    <div class="bench-row">
+      <div class="bench-item"><span class="bench-label">MMLU</span><span class="bench-val" id="b-mmlu"></span></div>
+      <div class="bench-item"><span class="bench-label">HumanEval</span><span class="bench-val" id="b-humaneval"></span></div>
+      <div class="bench-item"><span class="bench-label">SWE-bench</span><span class="bench-val" id="b-swe"></span></div>
+      <div class="bench-item"><span class="bench-label">GPQA</span><span class="bench-val" id="b-gpqa"></span></div>
+      <div class="bench-item"><span class="bench-label">Arena ELO</span><span class="bench-val" id="b-elo"></span></div>
+    </div>
+    <div class="why-block">
+      <span class="why-label" data-i18n="why-label">Recommendation rationale</span>
+      <p class="why-text" id="detail-why" data-i18n="why-placeholder">Select a model to view configuration rationale.</p>
+    </div>
+    <div class="action-row">
+      <button class="btn-primary" id="btn-download" disabled data-i18n="btn-download">Download</button>
+      <button class="btn-secondary" id="btn-launch" disabled data-i18n="btn-launch">Launch</button>
+      <button class="btn-danger hidden" id="btn-delete" data-i18n="btn-delete">Delete</button>
+      <a class="btn-ghost" id="btn-hf-link" href="#" target="_blank" rel="noopener" data-i18n="btn-hf">HuggingFace ↗</a>
+    </div>
+    <div class="progress-block hidden" id="progress-block">
+      <div class="progress-info"><span id="prog-filename"></span><span id="prog-status"></span></div>
+      <div class="progress-bar-wrap"><div class="progress-bar-fill" id="prog-fill" style="width:0%"></div></div>
+      <div class="progress-meta"><span id="prog-pct">0%</span><span id="prog-speed"></span><span id="prog-eta"></span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Hardware override modal -->
+<div id="hw-override-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header">
+      <span class="modal-title" data-i18n="hw-modal-title">Manual hardware configuration</span>
+      <button class="icon-btn" id="btn-close-hw-modal">✕</button>
+    </div>
+    <p class="modal-desc" data-i18n="hw-modal-desc">Override detected values. Used for model compatibility scoring only — does not affect actual hardware.</p>
+    <div class="hw-form">
+      <div class="hw-form-row">
+        <label class="hw-form-label" data-i18n="hw-form-cpu">CPU Brand</label>
+        <select class="hw-form-input" id="hw-override-cpu-vendor">
+          <option value="">Select Brand...</option>
+          <option value="AMD">AMD</option>
+          <option value="Intel">Intel</option>
+          <option value="Apple">Apple Silicon</option>
+        </select>
+      </div>
+      <div class="hw-form-row">
+        <label class="hw-form-label" data-i18n="hw-form-cpu-model">CPU Model</label>
+        <select class="hw-form-input" id="hw-override-cpu-model" disabled>
+          <option value="">Select CPU...</option>
+        </select>
+      </div>
+      <div class="hw-form-row">
+        <label class="hw-form-label" data-i18n="hw-form-gpu">GPU Brand</label>
+        <select class="hw-form-input" id="hw-override-gpu-vendor">
+          <option value="">Select Brand...</option>
+          <option value="NVIDIA">NVIDIA</option>
+          <option value="AMD">AMD</option>
+          <option value="Apple">Apple</option>
+          <option value="Integrated">Integrated Graphics</option>
+        </select>
+      </div>
+      <div class="hw-form-row">
+        <label class="hw-form-label" data-i18n="hw-form-gpu-model">GPU Model</label>
+        <select class="hw-form-input" id="hw-override-gpu-model" disabled>
+          <option value="">Select GPU...</option>
+        </select>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px">
+        <div class="hw-form-row">
+          <label class="hw-form-label" data-i18n="hw-form-vram">VRAM</label>
+          <select class="hw-form-input" id="hw-override-vram">
+            <option value="4">4 GB</option>
+            <option value="6">6 GB</option>
+            <option value="8">8 GB</option>
+            <option value="10">10 GB</option>
+            <option value="12">12 GB</option>
+            <option value="16">16 GB</option>
+            <option value="24">24 GB</option>
+            <option value="32">32 GB+</option>
+          </select>
+        </div>
+        <div class="hw-form-row">
+          <label class="hw-form-label" data-i18n="hw-form-ram">System RAM</label>
+          <select class="hw-form-input" id="hw-override-ram">
+            <option value="8">8 GB</option>
+            <option value="16">16 GB</option>
+            <option value="32" selected>32 GB</option>
+            <option value="64">64 GB</option>
+            <option value="128">128 GB+</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <button class="wz-primary-btn" id="btn-save-hw" style="width:100%">
+      <span data-i18n="hw-modal-save">Save configuration</span>
+    </button>
+  </div>
+</div>
+
+<!-- Quant picker modal -->
+<div id="quant-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header"><span class="modal-title" data-i18n="modal-title">Select quantization</span><button class="icon-btn" id="btn-close-modal">✕</button></div>
+    <p class="modal-desc" id="modal-model-name"></p>
+    <div class="quant-list" id="quant-list"></div>
+    <p class="modal-note" data-i18n="modal-note">Sizes are the exact files on HuggingFace. Q4_K_M offers the best quality-to-size ratio for most hardware.</p>
+  </div>
+</div>
+
+<div id="launch-bar" class="hidden">
+  <div class="launch-bar-left"><span class="running-dot"></span><span id="lbar-model"></span><span style="color:rgba(34,197,94,.3);margin:0 6px">·</span><code class="lbar-pid" id="lbar-pid"></code></div>
+  <div class="launch-bar-right">
+    <a class="lbar-open hidden" id="lbar-open" href="#" target="_blank" rel="noopener" data-i18n="btn-open-chat">Open chat ↗</a>
+    <button class="btn-stop" id="btn-stop" data-i18n="btn-stop">Stop</button>
+  </div>
+</div>
+<div id="toasts"></div>
+
+<script>
+'use strict';
+
+/* ══════════════════════════════════════
+   TRANSLATIONS
+══════════════════════════════════════ */
+const STRINGS = {
+  en: {
+    'mode-simple':'Simple','mode-pro':'Pro',
+    'step-1':'Scan','step-2':'Hardware','step-3':'Workflow','step-4':'Models','step-5':'Deploy',
+    'welcome-h1':'Deploy a local AI model matched to your hardware.',
+    'welcome-body':'System scan selects optimal model size and quantization for your configuration.',
+    'welcome-cta':'Scan System','welcome-note':'Runs entirely on this computer',
+    'scan-title':'Scanning system…',
+    'scan-cpu':'Processor','scan-ram':'System memory','scan-gpu':'GPU','scan-models':'Model index',
+    'hw-label-cpu':'CPU','hw-label-gpu':'GPU','hw-label-vram':'VRAM','hw-label-ram':'SYSTEM RAM',
+    'hw-continue':'Select workflow',
+    'hw-override-link':'Hardware not detected correctly? Enter specs manually',
+    'hw-head-high':'High-end GPU configuration detected.',
+    'hw-head-capable':'Capable GPU configuration detected.',
+    'hw-head-mid':'Mid-range GPU configuration detected.',
+    'hw-head-low':'Limited GPU memory detected.',
+    'hw-head-igpu':'Integrated graphics with shared memory detected.',
+    'hw-head-apple':'Apple Silicon unified memory detected.',
+    'hw-sum-gpu':'{vram} GB VRAM — runs models up to ~{max}B parameters fully on the GPU at Q4_K_M. Larger models split between GPU and CPU.',
+    'hw-sum-shared':'Models share your {ram} GB of system memory ({avail} GB free now) — comfortable up to ~{max}B parameters at Q4_K_M.',
+    'persona-h2':'Select a workflow.',
+    'persona-body':'Determines model family, context length, and quantization strategy.',
+    'p-coding-title':'Code generation','p-coding-desc':'Write, explain, and debug in any language',
+    'p-general-title':'General assistant','p-general-desc':'Instruction following, Q&A, summarization',
+    'p-vision-title':'Vision and document analysis','p-vision-desc':'Multimodal inputs, OCR, image captioning',
+    'p-stem-title':'Reasoning and research','p-stem-desc':'Chain-of-thought, STEM, structured proofs',
+    'p-story-title':'Long-form writing','p-story-desc':'Extended context, document drafting',
+    'p-instruction-title':'Instruction following','p-instruction-desc':'Structured prompt compliance, agentic tasks',
+    'recs-h2':'Recommended models',
+    'recs-browse':'View all models in Pro →','recs-back':'← Change workflow',
+    'recs-none':'No model fits the memory currently free. Close some applications or enter your specs manually.',
+    'dl-cancel':'Cancel',
+    'done-h2':'Ready to deploy.',
+    'done-cta':'Launch',
+    'done-ghost':'Select a different model',
+    'done-downloaded':'{name} — downloaded and ready.',
+    'api-creds-header':'Local API connection',
+    'api-creds-desc':'OpenAI-compatible. Connect VS Code, Cursor, Obsidian, or Open WebUI once the model is running.',
+    'copy-btn':'Copy','copied-btn':'Copied',
+    'hw-modal-title':'Manual hardware configuration',
+    'hw-modal-desc':'Override detected values. Used for model compatibility scoring only.',
+    'hw-form-cpu':'CPU Brand','hw-form-cpu-model':'CPU Model','hw-form-gpu':'GPU Brand','hw-form-gpu-model':'GPU Model',
+    'hw-form-vram':'VRAM','hw-form-ram':'System RAM',
+    'hw-modal-save':'Save configuration',
+    'search-placeholder':'Search models…',
+    'filter-provider':'Provider','filter-fit':'Fit','filter-usecase':'Use Case',
+    'chip-all':'All','chip-perfect':'Perfect','chip-good':'Good','chip-marginal':'Marginal',
+    'chip-coding':'Coding','chip-chat':'Chat','chip-vision':'Vision','chip-reasoning':'Reasoning',
+    'detail-persona-label':'Optimize for',
+    'pchip-general':'General','pchip-coding':'Coding','pchip-vision':'Vision',
+    'pchip-stem':'STEM','pchip-story':'Long-form','pchip-instruction':'Instruction',
+    'stat-fit':'Fit','stat-mode':'Mode','stat-quant':'Quant','stat-toks':'tok/s',
+    'stat-mem':'Mem','stat-layers':'GPU Layers','stat-ctx':'Context','stat-size':'Size',
+    'why-label':'Recommendation rationale','why-placeholder':'Select a model to view configuration rationale.',
+    'btn-download':'Download','btn-launch':'Launch','btn-hf':'HuggingFace ↗','btn-delete':'Delete',
+    'btn-refresh':'Refresh','btn-open-chat':'Open chat ↗',
+    'modal-title':'Select quantization',
+    'modal-note':'Sizes are the exact files on HuggingFace. Q4_K_M offers the best quality-to-size ratio for most hardware.',
+    'modal-loading':'Fetching file list from HuggingFace…',
+    'tag-rec':'recommended','tag-big':'too large','tag-inst':'downloaded','tag-shards':'{n} parts',
+    'btn-stop':'Stop',
+    'fit-perfect':'Perfect fit','fit-good':'Good fit','fit-marginal':'Marginal fit','fit-nofit':'Too large',
+    'top-pick':'Top pick',
+    'tag-coding':'Code generation and debugging across all languages and frameworks',
+    'tag-vision':'Multimodal inference — images, PDFs, and document extraction',
+    'tag-reasoning':'Structured reasoning, chain-of-thought, STEM problem solving',
+    'tag-longctx':'Long-context tasks — extended documents, multi-turn conversations',
+    'tag-default':'General-purpose instruction following and question answering',
+    'rec-dl-btn':'Download','rec-use-btn':'Use downloaded model',
+    'speed-vfast':'Very fast','speed-fast':'Fast','speed-moderate':'Moderate','speed-slow':'Slow',
+    'why-tpl':'{name} at {quant} quantization. On your {gpu}: {mem}% memory utilization, ~{toks} tok/s estimated throughput.',
+    'est-note':'Benchmarks marked ~ are estimated from model size.',
+    'model-count': n => `${n} model${n!==1?'s':''}`,
+    'models-n': n => `${n} models`,
+    'st-queued':'Queued…','st-downloading':'Downloading {name}: {pct}%','st-retry':'Reconnecting… (attempt {a}/8)',
+    'st-dl-done':'Download complete — {name}','st-ready-launch':'Ready to launch',
+    'st-loading':'Loading {name}… (first load can take a minute)','st-running':'Running: {name}',
+    'st-port':'API on port {port}','st-stopped':'Model stopped.',
+    'rt-missing':'The llama.cpp runtime (the engine that runs models) is not installed yet. Launch will download it automatically (~30–200 MB, one time).',
+    'rt-installing':'Installing llama.cpp runtime… {pct}%','rt-extracting':'Extracting llama.cpp runtime…',
+    'rt-done':'llama.cpp runtime installed ({v}).','rt-failed':'Runtime install failed: {e}',
+    'rt-confirm':'The llama.cpp runtime is not installed yet. Download it now? (one-time, ~30–200 MB)',
+    'err-backend':'Cannot reach the LLM Autotuner backend. Is the app still running?',
+    'err-download':'Download failed: {e}','err-launch':'Launch failed:\n{e}',
+    'err-dl-failed':'Download failed after {a} attempt(s): {e}',
+    'confirm-delete':'Delete {f} from disk?','deleted':'Deleted {f}.',
+    'refreshing':'Refreshing model catalog…','refreshed':'Catalog updated: {n} models.',
+    'dl-started':'Downloading {name} ({quant})…',
+    'dl-files':'file {i} of {n}',
+    'remaining':'{t} left',
+  },
+  zh: {
+    'mode-simple':'简单','mode-pro':'专业',
+    'step-1':'扫描','step-2':'硬件','step-3':'工作流','step-4':'模型','step-5':'部署',
+    'welcome-h1':'根据您的硬件部署本地 AI 模型。',
+    'welcome-body':'系统扫描将为您的配置选择最优模型大小和量化方案。',
+    'welcome-cta':'扫描系统','welcome-note':'完全在本机运行',
+    'scan-title':'正在扫描系统…',
+    'scan-cpu':'处理器','scan-ram':'系统内存','scan-gpu':'GPU','scan-models':'模型索引',
+    'hw-label-cpu':'CPU','hw-label-gpu':'GPU','hw-label-vram':'显存','hw-label-ram':'系统内存',
+    'hw-continue':'选择工作流',
+    'hw-override-link':'硬件未正确识别？手动输入规格',
+    'hw-head-high':'检测到高端 GPU 配置。',
+    'hw-head-capable':'检测到性能良好的 GPU 配置。',
+    'hw-head-mid':'检测到中端 GPU 配置。',
+    'hw-head-low':'GPU 显存有限。',
+    'hw-head-igpu':'检测到共享内存的集成显卡。',
+    'hw-head-apple':'检测到 Apple Silicon 统一内存。',
+    'hw-sum-gpu':'{vram} GB 显存 — 在 Q4_K_M 量化下可完全在 GPU 上运行约 {max}B 参数的模型。更大的模型将在 GPU 与 CPU 之间拆分。',
+    'hw-sum-shared':'模型共享 {ram} GB 系统内存（当前可用 {avail} GB）— 在 Q4_K_M 量化下适合约 {max}B 参数以内的模型。',
+    'persona-h2':'选择工作流。',
+    'persona-body':'决定模型系列、上下文长度和量化策略。',
+    'p-coding-title':'代码生成','p-coding-desc':'编写、解释和调试任何语言的代码',
+    'p-general-title':'通用助手','p-general-desc':'指令遵循、问答、摘要',
+    'p-vision-title':'视觉与文档分析','p-vision-desc':'多模态输入、OCR、图像描述',
+    'p-stem-title':'推理与研究','p-stem-desc':'思维链、STEM、结构化证明',
+    'p-story-title':'长文写作','p-story-desc':'超长上下文、文档起草',
+    'p-instruction-title':'指令遵循','p-instruction-desc':'结构化提示合规、智能体任务',
+    'recs-h2':'推荐模型',
+    'recs-browse':'在专业模式中查看全部 →','recs-back':'← 更换工作流',
+    'recs-none':'当前可用内存不足以运行任何模型。请关闭部分应用或手动输入硬件规格。',
+    'dl-cancel':'取消',
+    'done-h2':'准备部署。',
+    'done-cta':'启动',
+    'done-ghost':'选择其他模型',
+    'done-downloaded':'{name} — 已下载，可以启动。',
+    'api-creds-header':'本地 API 连接',
+    'api-creds-desc':'兼容 OpenAI 接口。模型运行后，可连接 VS Code、Cursor、Obsidian 或 Open WebUI。',
+    'copy-btn':'复制','copied-btn':'已复制',
+    'hw-modal-title':'手动硬件配置',
+    'hw-modal-desc':'覆盖检测到的值。仅用于模型兼容性评分，不影响实际硬件。',
+    'hw-form-cpu':'CPU 品牌','hw-form-cpu-model':'CPU 型号','hw-form-gpu':'GPU 品牌','hw-form-gpu-model':'GPU 型号',
+    'hw-form-vram':'显存','hw-form-ram':'系统内存',
+    'hw-modal-save':'保存配置',
+    'search-placeholder':'搜索模型…',
+    'filter-provider':'提供商','filter-fit':'适配度','filter-usecase':'用途',
+    'chip-all':'全部','chip-perfect':'完美','chip-good':'良好','chip-marginal':'勉强',
+    'chip-coding':'编程','chip-chat':'聊天','chip-vision':'视觉','chip-reasoning':'推理',
+    'detail-persona-label':'优化目标',
+    'pchip-general':'通用','pchip-coding':'编程','pchip-vision':'视觉',
+    'pchip-stem':'理科','pchip-story':'长文','pchip-instruction':'指令',
+    'stat-fit':'适配度','stat-mode':'运行模式','stat-quant':'量化','stat-toks':'tok/s',
+    'stat-mem':'内存','stat-layers':'GPU 层数','stat-ctx':'上下文','stat-size':'大小',
+    'why-label':'推荐依据','why-placeholder':'选择模型查看配置依据。',
+    'btn-download':'下载','btn-launch':'启动','btn-hf':'HuggingFace ↗','btn-delete':'删除',
+    'btn-refresh':'刷新','btn-open-chat':'打开聊天 ↗',
+    'modal-title':'选择量化级别',
+    'modal-note':'大小为 HuggingFace 上的实际文件大小。Q4_K_M 在质量与大小之间提供最佳平衡。',
+    'modal-loading':'正在从 HuggingFace 获取文件列表…',
+    'tag-rec':'推荐','tag-big':'过大','tag-inst':'已下载','tag-shards':'{n} 个分片',
+    'btn-stop':'停止',
+    'fit-perfect':'完美匹配','fit-good':'良好匹配','fit-marginal':'勉强匹配','fit-nofit':'过大',
+    'top-pick':'首选',
+    'tag-coding':'跨语言和框架的代码生成与调试',
+    'tag-vision':'多模态推理——图像、PDF 和文档提取',
+    'tag-reasoning':'结构化推理、思维链、STEM 解题',
+    'tag-longctx':'长文本任务——长文档、多轮对话',
+    'tag-default':'通用指令遵循与问答',
+    'rec-dl-btn':'下载','rec-use-btn':'使用已下载的模型',
+    'speed-vfast':'极快','speed-fast':'快速','speed-moderate':'中等','speed-slow':'较慢',
+    'why-tpl':'{name} 采用 {quant} 量化。在您的 {gpu} 上：内存占用 {mem}%，预计吞吐量约 {toks} tok/s。',
+    'est-note':'标有 ~ 的基准分数为根据模型规模的估算值。',
+    'model-count': n => `${n} 个模型`,
+    'models-n': n => `${n} 个模型`,
+    'st-queued':'排队中…','st-downloading':'正在下载 {name}：{pct}%','st-retry':'正在重新连接…（第 {a}/8 次）',
+    'st-dl-done':'下载完成 — {name}','st-ready-launch':'可以启动',
+    'st-loading':'正在加载 {name}…（首次加载可能需要一分钟）','st-running':'运行中：{name}',
+    'st-port':'API 端口 {port}','st-stopped':'模型已停止。',
+    'rt-missing':'尚未安装 llama.cpp 运行时（运行模型的引擎）。启动时将自动下载（约 30–200 MB，仅需一次）。',
+    'rt-installing':'正在安装 llama.cpp 运行时… {pct}%','rt-extracting':'正在解压 llama.cpp 运行时…',
+    'rt-done':'llama.cpp 运行时已安装（{v}）。','rt-failed':'运行时安装失败：{e}',
+    'rt-confirm':'尚未安装 llama.cpp 运行时。现在下载吗？（仅需一次，约 30–200 MB）',
+    'err-backend':'无法连接 LLM Autotuner 后端。应用是否仍在运行？',
+    'err-download':'下载失败：{e}','err-launch':'启动失败：\n{e}',
+    'err-dl-failed':'尝试 {a} 次后下载失败：{e}',
+    'confirm-delete':'从磁盘删除 {f}？','deleted':'已删除 {f}。',
+    'refreshing':'正在刷新模型目录…','refreshed':'目录已更新：{n} 个模型。',
+    'dl-started':'正在下载 {name}（{quant}）…',
+    'dl-files':'第 {i}/{n} 个文件',
+    'remaining':'剩余 {t}',
+  }
+};
+
+/* ══════════════════════════════════════
+   STATE
+══════════════════════════════════════ */
+let hwData = null;
+let hwOverride = null; // set by manual override modal
+let allModels = [];
+let installed = [];     // /api/installed
+let runtimeInfo = null; // /api/runtime
+let launchInfo = null;  // /api/launch-status
+
+const $ = id => document.getElementById(id);
+let currentMode='simple', currentTheme='dark', currentLang='en';
+let wizardPersona=null, wizardStep=0;
+let selectedId=null, sortCol='fit', sortDir='asc', detailPersona='general', detailRec=null;
+let filterSearch='', filterProvider='all', filterFit='all', filterUseCase='all';
+let filtered=[];
+
+// The download the user is currently watching (wizard or pro panel)
+const DL = { key:'', modelId:'', modelName:'', quant:'', filename:'', status:'idle', origin:'' };
+// The model chosen in the wizard for the Deploy step
+const PICK = { modelId:'', modelName:'', filename:'' };
+
+const STEPS=['welcome','scanning','hardware','persona','recs','download','done'];
+const STEP_NODE=[1,1,2,3,4,5,6];   // which progress node is active for each step
+
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function t(key, vars){
+  let s=(STRINGS[currentLang]&&STRINGS[currentLang][key])??STRINGS.en[key]??key;
+  if (vars && typeof s==='string') for (const k in vars) s=s.split('{'+k+'}').join(vars[k]);
+  return s;
+}
+function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function setVal(id, txt){ const el=$(id); if(el) el.textContent=txt; }
+function formatEta(secs){
+  secs=Math.max(0,Math.round(secs));
+  if (secs<60) return secs+'s';
+  if (secs<3600) return `${Math.floor(secs/60)}m ${secs%60}s`;
+  return `${Math.floor(secs/3600)}h ${Math.floor(secs%3600/60)}m`;
+}
+function toast(msg, kind='', ms=5000){
+  const el=document.createElement('div');
+  el.className='toast '+kind; el.textContent=msg;
+  $('toasts').appendChild(el);
+  setTimeout(()=>el.remove(), ms);
+}
+
+/* ══════════════════════════════════════
+   API
+══════════════════════════════════════ */
+async function req(url, opts={}) {
+  let r;
+  try { r = await fetch(url, opts); }
+  catch(e) { throw new Error(t('err-backend')); }
+  let body=null;
+  try { body = await r.json(); } catch(e) {}
+  if (!r.ok) throw new Error((body && (typeof body.detail==='string' ? body.detail : JSON.stringify(body.detail))) || `HTTP ${r.status}`);
+  return body;
+}
+const post = (url, data) => req(url, { method:'POST', headers:{'Content-Type':'application/json'}, body: data===undefined ? undefined : JSON.stringify(data) });
+const API = {
+  hardware:       ()           => req('/api/hardware'),
+  models:         ()           => req('/api/models'),
+  modelsOverride: (hw)         => post('/api/models/override', hw),
+  refresh:        ()           => post('/api/refresh'),
+  recommend:      (id, p)      => post('/api/recommend', { model_id:id, persona:p, hardware: hwOverride || null }),
+  hfFiles:        (id)         => req('/api/hf-files/' + id),
+  download:       (id, quant)  => post('/api/download', { model_id:id, quant }),
+  downloads:      ()           => req('/api/downloads'),
+  cancel:         (key)        => req('/api/downloads/' + encodeURI(key), { method:'DELETE' }),
+  installed:      ()           => req('/api/installed'),
+  deleteModel:    (f)          => req('/api/installed/' + encodeURI(f), { method:'DELETE' }),
+  runtime:        ()           => req('/api/runtime'),
+  installRuntime: ()           => post('/api/runtime/install'),
+  launch:         (p)          => post('/api/launch', p),
+  stop:           ()           => post('/api/stop'),
+  launchStat:     ()           => req('/api/launch-status'),
+};
+
+const loadModels = () => (hwOverride ? API.modelsOverride(hwOverride) : API.models()).then(m => { allModels = m; return m; });
+const refreshInstalled = () => API.installed().then(list => { installed = list; return list; }).catch(() => installed);
+
+function installedFor(modelId, quant) {
+  const list = installed.filter(x => x.model_id === modelId && x.complete);
+  if (!list.length) return null;
+  return (quant && list.find(x => x.quant === quant)) || list[0];
+}
+
+/* ══════════════════════════════════════
+   i18n / theme / mode
+══════════════════════════════════════ */
+function setLang(lang, save=true) {
+  currentLang = lang;
+  document.documentElement.setAttribute('data-lang', lang);
+  document.documentElement.setAttribute('lang', lang==='zh'?'zh-CN':'en');
+  $('btn-lang-en').classList.toggle('active', lang==='en');
+  $('btn-lang-zh').classList.toggle('active', lang==='zh');
+  if (save) try { localStorage.setItem('llmat-lang', lang); } catch(e) {}
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const v=t(el.dataset.i18n); if(typeof v==='string') el.textContent=v;
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{
+    const v=t(el.dataset.i18nPh); if(v) el.placeholder=v;
+  });
+  document.querySelectorAll('[data-i18n-copy]').forEach(el=>{ el.textContent = t('copy-btn'); });
+  if ((hwOverride||hwData) && wizardStep>=2) renderHardwareStep();
+  if (wizardStep===4 && wizardPersona) renderRecs();
+  if (wizardStep===6) renderDoneStep();
+  if (currentMode==='pro') { buildProviderChips(); applyFilters(); if (selectedId) openDetail(selectedId); }
+}
+
+function setTheme(th, save=true) {
+  currentTheme=th;
+  document.documentElement.setAttribute('data-theme', th);
+  $('theme-icon').textContent = th==='dark'?'☀️':'🌙';
+  if (save) try { localStorage.setItem('llmat-theme', th); } catch(e) {}
+}
+
+function renderHwChips() {
+  const hw = hwOverride || hwData;
+  if (!hw) return;
+  $('hw-cpu').textContent = hw.cpu_name + ' (' + hw.physical_cores + 'c)';
+  $('hw-ram').textContent = 'RAM: ' + hw.available_ram_gb + '/' + hw.total_ram_gb + ' GB';
+  $('hw-gpu').textContent = 'GPU: ' + hw.gpu.name + '  ' + (+hw.gpu.free_vram_gb).toFixed(1) + '/' + hw.gpu.total_vram_gb + ' GB';
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  const tog = $('mode-toggle');
+  const simple = mode === 'simple';
+  $('simple-view').style.display = simple ? 'flex' : 'none';
+  $('pro-view').classList.toggle('hidden', simple);
+  $('btn-simple-mode').classList.toggle('active', simple);
+  $('btn-pro-mode').classList.toggle('active', !simple);
+  if (tog) tog.dataset.active = mode;
+  document.querySelectorAll('[data-pro-only]').forEach(el => el.style.display = simple ? 'none' : '');
+  if (simple) return;
+  renderHwChips();
+  if (!hwData) API.hardware().then(hw => { hwData = hw; renderHwChips(); }).catch(()=>{});
+  if (allModels.length === 0) {
+    $('table-body').innerHTML = `<tr class="loading-row"><td colspan="12"><span class="loading-text">Loading…</span></td></tr>`;
+    loadModels().then(() => { buildProviderChips(); applyFilters(); })
+      .catch(e => { $('table-body').innerHTML = `<tr class="loading-row"><td colspan="12" style="color:var(--red)">${esc(e.message)}</td></tr>`; });
+  } else {
+    buildProviderChips(); applyFilters();
+  }
+}
+
+/* ══════════════════════════════════════
+   INIT
+══════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  let th='dark', lang='en';
+  try { th = localStorage.getItem('llmat-theme') || 'dark'; lang = localStorage.getItem('llmat-lang') || 'en'; } catch(e) {}
+  setTheme(th, false);
+  setMode('simple');
+  setLang(lang, false);
+
+  // Warm up in the background so the scan feels instant
+  API.hardware().then(hw => { hwData = hw; }).catch(()=>{});
+  refreshInstalled();
+  API.runtime().then(r => { runtimeInfo = r; }).catch(()=>{});
+  pollStatus();
+  setInterval(pollStatus, 2000);
+
+  $('btn-theme').addEventListener('click', () => setTheme(currentTheme==='dark'?'light':'dark'));
+  $('btn-simple-mode').addEventListener('click', () => setMode('simple'));
+  $('btn-pro-mode').addEventListener('click', () => setMode('pro'));
+  $('btn-lang-en').addEventListener('click', () => setLang('en'));
+  $('btn-lang-zh').addEventListener('click', () => setLang('zh'));
+  $('btn-scan').addEventListener('click', startScan);
+  $('btn-hw-continue').addEventListener('click', () => goWizardStep(3));
+  $('btn-cancel-dl').addEventListener('click', cancelDl);
+  $('btn-pick-again').addEventListener('click', () => { goWizardStep(4); renderRecs(); });
+  $('btn-wizard-launch').addEventListener('click', wizardLaunch);
+  $('btn-view-all').addEventListener('click', e => { e.preventDefault(); setMode('pro'); });
+  $('btn-change-workflow').addEventListener('click', e => { e.preventDefault(); goWizardStep(3); });
+  $('btn-stop').addEventListener('click', stopModel);
+  $('btn-refresh').addEventListener('click', refreshCatalog);
+
+  // Hardware override modal
+  const CPU_MODELS = {
+    'AMD': ['Ryzen 3', 'Ryzen 5', 'Ryzen 7', 'Ryzen 9', 'Ryzen AI 7', 'Ryzen AI 9', 'Threadripper'],
+    'Intel': ['Core i3', 'Core i5', 'Core i7', 'Core i9', 'Core Ultra 5', 'Core Ultra 7', 'Core Ultra 9'],
+    'Apple': ['M1', 'M1 Pro', 'M1 Max', 'M1 Ultra', 'M2', 'M2 Pro', 'M2 Max', 'M2 Ultra', 'M3', 'M3 Pro', 'M3 Max', 'M4', 'M4 Pro', 'M4 Max']
+  };
+  const GPU_MODELS = {
+    'NVIDIA': ['RTX 5090', 'RTX 5080', 'RTX 5070', 'RTX 4090', 'RTX 4080', 'RTX 4070', 'RTX 4060', 'RTX 3090', 'RTX 3080', 'RTX 3070', 'RTX 3060', 'GTX 1660'],
+    'AMD': ['RX 9070 XT', 'RX 7900 XTX', 'RX 7900 XT', 'RX 7800 XT', 'RX 7700 XT', 'RX 6900 XT', 'RX 6800 XT', 'RX 6700 XT'],
+    'Apple': ['Unified GPU (M-Series)'],
+    'Integrated': ['Intel UHD Graphics', 'Intel Iris Xe', 'Intel Arc Graphics', 'AMD Radeon Graphics', 'AMD Radeon 780M']
+  };
+  const fillSel = (sel, v, models, ph) => {
+    if (!v) { sel.innerHTML = `<option value="">${ph}</option>`; sel.disabled = true; return; }
+    sel.innerHTML = models[v].map(m => `<option value="${esc(v==='Integrated'?m:v+' '+m)}">${esc(m)}</option>`).join('');
+    sel.disabled = false;
+  };
+  $('hw-override-cpu-vendor').addEventListener('change', e => fillSel($('hw-override-cpu-model'), e.target.value, CPU_MODELS, 'Select CPU...'));
+  $('hw-override-gpu-vendor').addEventListener('change', e => fillSel($('hw-override-gpu-model'), e.target.value, GPU_MODELS, 'Select GPU...'));
+
+  $('btn-hw-override').addEventListener('click', e => {
+    e.preventDefault();
+    const hw = hwOverride || hwData;
+    if (!hw) return;
+    const nearest = (sel, v) => {
+      const opts=[...sel.options].map(o=>+o.value);
+      sel.value = String(opts.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a, opts[0]));
+    };
+    nearest($('hw-override-vram'), hw.gpu.total_vram_gb || 8);
+    nearest($('hw-override-ram'), hw.total_ram_gb || 32);
+    $('hw-override-modal').classList.remove('hidden');
+  });
+  $('btn-close-hw-modal').addEventListener('click', () => $('hw-override-modal').classList.add('hidden'));
+  $('hw-override-modal').addEventListener('click', e => { if(e.target===$('hw-override-modal')) $('hw-override-modal').classList.add('hidden'); });
+  $('quant-modal').addEventListener('click', e => { if(e.target===$('quant-modal')) $('quant-modal').classList.add('hidden'); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { $('hw-override-modal').classList.add('hidden'); $('quant-modal').classList.add('hidden'); }
+  });
+  $('btn-save-hw').addEventListener('click', saveHwOverride);
+
+  // Copy buttons (credentials)
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('[data-copy]');
+    if (!btn) return;
+    const text = btn.dataset.copy;
+    const done = () => {
+      btn.textContent = t('copied-btn'); btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = t('copy-btn'); btn.classList.remove('copied'); }, 1800);
+    };
+    if (navigator.clipboard) navigator.clipboard.writeText(text).then(done).catch(()=>{});
+    else { const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); done();}catch(_){} ta.remove(); }
+  });
+
+  // Persona cards
+  document.querySelectorAll('.persona-card').forEach(card => {
+    card.addEventListener('click', () => {
+      document.querySelectorAll('.persona-card').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected');
+      wizardPersona = card.dataset.persona;
+      setTimeout(() => { goWizardStep(4); renderRecs(); }, 180);
+    });
+  });
+
+  // Pro mode
+  $('search').addEventListener('input', e => { filterSearch=e.target.value; applyFilters(); });
+  document.querySelectorAll('th.sortable').forEach(th => th.addEventListener('click', () => setSort(th.dataset.col)));
+  $('filter-fit').querySelectorAll('[data-fit]').forEach(btn => btn.addEventListener('click', () => {
+    filterFit=btn.dataset.fit;
+    $('filter-fit').querySelectorAll('[data-fit]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); applyFilters();
+  }));
+  $('filter-usecase').querySelectorAll('[data-uc]').forEach(btn => btn.addEventListener('click', () => {
+    filterUseCase=btn.dataset.uc;
+    $('filter-usecase').querySelectorAll('[data-uc]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); applyFilters();
+  }));
+  document.querySelectorAll('.pchip').forEach(btn => btn.addEventListener('click', () => {
+    document.querySelectorAll('.pchip').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    detailPersona = btn.dataset.persona;
+    if (selectedId) loadDetailRecommendation(selectedId);
+  }));
+  $('btn-close-detail').addEventListener('click', closeDetail);
+  $('btn-download').addEventListener('click', () => { if (selectedId) openQuantModal(selectedId); });
+  $('btn-launch').addEventListener('click', () => { if (selectedId) proLaunch(selectedId); });
+  $('btn-delete').addEventListener('click', () => { if (selectedId) proDelete(selectedId); });
+  $('btn-close-modal').addEventListener('click', () => $('quant-modal').classList.add('hidden'));
+});
+
+/* ══════════════════════════════════════
+   HARDWARE OVERRIDE
+══════════════════════════════════════ */
+async function saveHwOverride() {
+  if (!hwData) return;
+  const cpuM = $('hw-override-cpu-model').value;
+  const gpuVendor = $('hw-override-gpu-vendor').value;
+  const gpuM = $('hw-override-gpu-model').value;
+  const vram = parseFloat($('hw-override-vram').value) || hwData.gpu.total_vram_gb;
+  const ram = parseFloat($('hw-override-ram').value) || hwData.total_ram_gb;
+  const integrated = gpuVendor ? (gpuVendor === 'Integrated' || gpuVendor === 'Apple') : hwData.gpu.integrated;
+  const vendor = gpuVendor === 'Integrated' ? (/AMD/i.test(gpuM) ? 'AMD' : 'Intel') : (gpuVendor || hwData.gpu.vendor);
+  const ramAvail = Math.max(1, ram * 0.8);
+
+  hwOverride = {
+    ...hwData,
+    cpu_name: cpuM || hwData.cpu_name,
+    total_ram_gb: ram,
+    available_ram_gb: +ramAvail.toFixed(1),
+    gpu: {
+      ...hwData.gpu,
+      name: gpuM || hwData.gpu.name,
+      vendor, integrated,
+      cuda: vendor === 'NVIDIA', metal: vendor === 'Apple', vulkan: vendor !== 'Apple',
+      total_vram_gb: vendor === 'Apple' ? +(ram*0.75).toFixed(1) : vram,
+      free_vram_gb: vendor === 'Apple' ? +(ramAvail*0.75).toFixed(1) : +(vram * 0.92).toFixed(1),
+    }
+  };
+  try { await loadModels(); } catch(e) { toast(e.message, 'error'); }
+
+  renderHardwareStep();
+  renderHwChips();
+  if (wizardPersona && wizardStep===4) renderRecs();
+  if (currentMode==='pro') { applyFilters(); if (selectedId) openDetail(selectedId); }
+  $('hw-override-modal').classList.add('hidden');
+}
+
+/* ══════════════════════════════════════
+   WIZARD
+══════════════════════════════════════ */
+function goWizardStep(n) {
+  wizardStep = n;
+  STEPS.forEach(s => { const el=$(`step-${s}`); if(el) el.classList.add('hidden'); });
+  const el = $(`step-${STEPS[n]}`); if(el) el.classList.remove('hidden');
+  const active = STEP_NODE[n];
+  document.querySelectorAll('.wp-label').forEach(lbl => {
+    const s = parseInt(lbl.dataset.step);
+    lbl.classList.remove('done','active');
+    if (s < active) lbl.classList.add('done');
+    else if (s === active) lbl.classList.add('active');
+  });
+  $('simple-view').scrollTop = 0;
+}
+
+function setDot(id, state) { const d=document.querySelector(`#${id} .scan-dot`); if(d) d.className='scan-dot '+state; }
+
+async function startScan() {
+  goWizardStep(1);
+  const rows = ['scan-cpu','scan-ram','scan-gpu','scan-models'];
+  rows.forEach(id => { setDot(id, ''); $(id).classList.remove('row-done'); });
+  ['scan-cpu-val','scan-ram-val','scan-gpu-val','scan-models-val'].forEach(id => setVal(id, ''));
+
+  setDot('scan-cpu','running'); setDot('scan-ram','running'); setDot('scan-gpu','running');
+  try {
+    if (!hwData) hwData = await API.hardware();
+  } catch(e) { toast(e.message, 'error'); goWizardStep(0); return; }
+  const hw = hwOverride || hwData;
+  setVal('scan-cpu-val', hw.cpu_name);  setDot('scan-cpu','done'); $('scan-cpu').classList.add('row-done');
+  await sleep(150);
+  setVal('scan-ram-val', hw.total_ram_gb + ' GB'); setDot('scan-ram','done'); $('scan-ram').classList.add('row-done');
+  await sleep(150);
+  setVal('scan-gpu-val', hw.gpu.name); setDot('scan-gpu','done'); $('scan-gpu').classList.add('row-done');
+
+  setDot('scan-models','running');
+  try { await Promise.all([loadModels(), refreshInstalled()]); }
+  catch(e) { toast(e.message, 'error'); goWizardStep(0); return; }
+  setVal('scan-models-val', t('models-n')(allModels.length));
+  setDot('scan-models','done'); $('scan-models').classList.add('row-done');
+  await sleep(450);
+  renderHardwareStep();
+  goWizardStep(2);
+}
+
+function renderHardwareStep() {
+  const hw = hwOverride || hwData;
+  if (!hw) return;
+  const g = hw.gpu, vram = g.total_vram_gb;
+  setVal('hc-cpu', hw.cpu_name);
+  setVal('hc-gpu', g.name);
+  setVal('hc-vram', g.integrated && g.vendor!=='Apple' ? `${vram} GB (shared)` : vram + ' GB');
+  setVal('hc-ram', hw.total_ram_gb + ' GB');
+  // Q4_K_M ≈ 0.6 GB per billion params + ~25% for context and buffers
+  const maxB = gb => Math.max(0.5, Math.floor(gb / 0.75));
+  if (g.vendor === 'Apple' || g.integrated) {
+    $('hw-result-icon').textContent = g.vendor==='Apple' ? '⚡' : '✅';
+    setVal('hw-headline', t(g.vendor==='Apple' ? 'hw-head-apple' : 'hw-head-igpu'));
+    const pool = g.vendor==='Apple' ? g.free_vram_gb : Math.max(0, hw.available_ram_gb - 1.5);
+    setVal('hw-summary', t('hw-sum-shared', { ram: hw.total_ram_gb, avail: hw.available_ram_gb, max: maxB(pool) }));
+  } else {
+    const key = vram >= 20 ? 'hw-head-high' : vram >= 12 ? 'hw-head-capable' : vram >= 6 ? 'hw-head-mid' : 'hw-head-low';
+    $('hw-result-icon').textContent = vram >= 12 ? '⚡' : vram >= 6 ? '✅' : '⚠️';
+    setVal('hw-headline', t(key));
+    setVal('hw-summary', t('hw-sum-gpu', { vram, max: maxB(Math.max(0, g.free_vram_gb - 0.4)) }));
+  }
+}
+
+/* ══════════════════════════════════════
+   RECOMMENDATIONS
+══════════════════════════════════════ */
+function renderRecs() {
+  const match = {
+    coding: m=>m.is_coding,
+    general: m=>!m.is_coding && (m.use_case==='Chat' || m.use_case==='Vision'),
+    vision: m=>m.is_vision,
+    stem: m=>m.is_reasoning,
+    story: m=>m.ctx_k>=64 && !m.is_coding,
+    instruction: m=>!m.is_coding,
+  }[wizardPersona]||(()=>true);
+  const rank = {
+    coding: m=>m.swe_bench*0.55+m.humaneval*0.45,
+    stem: m=>m.gpqa*0.6+m.mmlu*0.4,
+    instruction: m=>m.ifeval,
+    vision: m=>m.mmlu,
+  }[wizardPersona] || (m=>m.score);
+  const sub = {
+    coding:{en:'Ranked for code generation on your hardware',zh:'针对您硬件上代码生成的推荐'},
+    general:{en:'Ranked for general instruction following',zh:'针对通用指令遵循的推荐'},
+    vision:{en:'Multimodal models ranked for your hardware',zh:'针对您硬件的多模态模型推荐'},
+    stem:{en:'Ranked for reasoning and research tasks',zh:'针对推理和研究任务的推荐'},
+    story:{en:'Ranked by context length and fluency',zh:'按上下文长度和流畅度排名'},
+    instruction:{en:'Ranked by instruction compliance score',zh:'按指令合规评分排名'},
+  }[wizardPersona];
+  $('recs-subtitle').textContent = sub ? sub[currentLang] : '';
+
+  // Prefer clean fits; usable speed matters more than an extra benchmark point
+  const usable = allModels.filter(m => m.fit==='Perfect' || m.fit==='Good');
+  const pool = usable.length ? usable : allModels.filter(m=>m.fit==='Marginal');
+  const order = (a,b) => (rank(b) + Math.min(b.tok_s,30)*0.4) - (rank(a) + Math.min(a.tok_s,30)*0.4);
+  let candidates = pool.filter(match).sort(order).slice(0,3);
+  if (candidates.length<2) candidates = [...candidates, ...pool.filter(m=>!candidates.includes(m)).sort(order)].slice(0,3);
+
+  if (!candidates.length) {
+    $('rec-cards').innerHTML = `<div class="rec-card"><div class="rc-tagline">${esc(t('recs-none'))}</div></div>`;
+    return;
+  }
+
+  const spdKey = ts=>ts>=40?'speed-vfast':ts>=15?'speed-fast':ts>=6?'speed-moderate':'speed-slow';
+  const tagKey = m=>{
+    if (m.is_coding) return 'tag-coding';
+    if (wizardPersona==='vision' && m.is_vision) return 'tag-vision';
+    if (m.is_reasoning) return 'tag-reasoning';
+    if (m.ctx_k>=64 && wizardPersona==='story') return 'tag-longctx';
+    if (m.is_vision) return 'tag-vision';
+    return 'tag-default';
+  };
+  const fitKey = f=>f==='Perfect'?'fit-perfect':f==='Good'?'fit-good':f==='Marginal'?'fit-marginal':'fit-nofit';
+
+  $('rec-cards').innerHTML = candidates.map((m,i)=>{
+    const isTop=i===0, fCls=m.fit.replace(' ','-');
+    const inst = installedFor(m.id, m.quant);
+    return `
+    <div class="rec-card${isTop?' rec-top':''}">
+      <div class="rc-header">
+        <span class="rc-fit-badge ${fCls}"><span class="fit-dot ${fCls}"></span> ${esc(t(fitKey(m.fit)))}</span>
+        ${isTop?`<span class="rc-rank">${esc(t('top-pick'))}</span>`:''}
+      </div>
+      <div class="rc-name">${esc(m.name)}${inst?'<span class="inst-badge">✓</span>':''}</div>
+      <div class="rc-tagline">${esc(t(tagKey(m)))}</div>
+      <div class="rc-meta">
+        <span class="rc-meta-item">💾 <strong>${m.size_gb} GB</strong></span>
+        <span class="rc-meta-item">⚡ <strong>${esc(t(spdKey(m.tok_s)))}</strong> ~${m.tok_s} tok/s</span>
+        <span class="rc-meta-item">🖥️ <strong>${esc(m.mode)}</strong></span>
+        <span class="rc-meta-item">📚 <strong>${Math.round(m.launch_ctx/1024)}k</strong> ctx</span>
+        <span class="rc-meta-item">🎯 <strong>${esc(m.quant)}</strong></span>
+      </div>
+      <div class="rc-actions">
+        <button class="rc-btn-download" data-id="${esc(m.id)}" data-installed="${inst?esc(inst.filename):''}">
+          ${inst ? esc(t('rec-use-btn')) : `${esc(t('rec-dl-btn'))} (${m.size_gb} GB)`}
+        </button>
+        <a class="rc-btn-hf" href="${esc(m.hf_url)}" target="_blank" rel="noopener">HuggingFace ↗</a>
+      </div>
+    </div>`;
+  }).join('');
+
+  $('rec-cards').querySelectorAll('.rc-btn-download').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const m = allModels.find(x => x.id === btn.dataset.id);
+      if (!m) return;
+      if (btn.dataset.installed) {
+        Object.assign(PICK, { modelId:m.id, modelName:m.name, filename:btn.dataset.installed });
+        goWizardStep(6); renderDoneStep();
+      } else {
+        wizardDownload(m);
+      }
+    });
+  });
+}
+
+/* ══════════════════════════════════════
+   DOWNLOADS
+══════════════════════════════════════ */
+async function beginDownload(m, quant, origin) {
+  const job = await API.download(m.id, quant);
+  Object.assign(DL, { key: job.key, modelId: m.id, modelName: m.name, quant: job.quant,
+                      filename: job.filename, status: 'downloading', origin });
+  showDownloadInBar(job);
+  return job;
+}
+
+async function wizardDownload(m) {
+  goWizardStep(5);
+  setVal('dl-model-name', m.name);
+  setVal('dl-size-info', `${m.quant} · ~${m.size_gb} GB`);
+  $('dl-bar-fill').style.width = '0%';
+  setVal('dl-pct', '0%'); setVal('dl-speed', ''); setVal('dl-eta', t('st-queued'));
+  try {
+    const job = await beginDownload(m, m.quant, 'wizard');
+    setVal('dl-size-info', `${job.quant} · ${(job.total_bytes/1073741824).toFixed(2)} GB` + (job.file_count>1 ? ` · ${job.file_count} files` : ''));
+  } catch(e) {
+    toast(t('err-download', { e: e.message }), 'error', 8000);
+    goWizardStep(4);
+  }
+}
+
+async function cancelDl() {
+  if (DL.key && DL.status === 'downloading') { try { await API.cancel(DL.key); } catch(e) {} }
+  DL.status = 'idle';
+  $('launch-bar').classList.add('hidden');
+  goWizardStep(4); renderRecs();
+}
+
+function showDownloadInBar(job) {
+  $('launch-bar').classList.remove('hidden');
+  $('lbar-open').classList.add('hidden');
+  const retrying = job.attempt > 1 && job.status === 'downloading';
+  $('lbar-model').textContent = job.status === 'queued' ? t('st-queued') :
+    t('st-downloading', { name: DL.modelName, pct: Math.floor(job.pct || 0) });
+  $('lbar-pid').textContent = retrying ? t('st-retry', { a: job.attempt }) :
+    (job.speed_mbs > 0 ? job.speed_mbs.toFixed(1) + ' MB/s' : '') +
+    (job.file_count > 1 ? ' · ' + t('dl-files', { i: job.file_index || 1, n: job.file_count }) : '');
+}
+
+async function trackDownload() {
+  const jobs = await API.downloads();
+  const d = jobs.find(x => x.key === DL.key);
+  if (!d) return;
+
+  if (d.status === 'failed' || d.status === 'cancelled') {
+    DL.status = 'idle';
+    $('launch-bar').classList.add('hidden');
+    $('progress-block').classList.add('hidden');
+    if (d.status === 'failed') toast(t('err-dl-failed', { a: d.attempt || 1, e: d.error || '?' }), 'error', 10000);
+    if (wizardStep === 5) { goWizardStep(4); renderRecs(); }
+    return;
+  }
+
+  const done = d.status === 'done';
+  showDownloadInBar(d);
+  const eta = d.eta_s > 0 ? t('remaining', { t: formatEta(d.eta_s) }) : '';
+
+  // Pro-mode progress block
+  if (selectedId === DL.modelId) {
+    $('progress-block').classList.remove('hidden');
+    $('prog-filename').textContent = DL.filename.split('/').pop();
+    $('prog-status').textContent = done ? '✓' : Math.floor(d.pct) + '%';
+    $('prog-fill').style.width = d.pct + '%';
+    $('prog-pct').textContent = Math.floor(d.pct) + '%';
+    $('prog-speed').textContent = d.speed_mbs > 0 ? d.speed_mbs.toFixed(1) + ' MB/s' : '';
+    $('prog-eta').textContent = done ? '' : eta;
+  }
+
+  // Wizard download step
+  if (wizardStep === 5) {
+    $('dl-bar-fill').style.width = d.pct + '%';
+    setVal('dl-pct', Math.floor(d.pct) + '%');
+    setVal('dl-speed', d.speed_mbs > 0 ? d.speed_mbs.toFixed(1) + ' MB/s' : '');
+    setVal('dl-eta', d.attempt > 1 && !done ? t('st-retry', { a: d.attempt }) : eta);
+  }
+
+  if (done) {
+    DL.status = 'idle';
+    await refreshInstalled();
+    $('lbar-model').textContent = t('st-dl-done', { name: DL.modelName });
+    $('lbar-pid').textContent = t('st-ready-launch');
+    toast(t('st-dl-done', { name: DL.modelName }), 'ok');
+    if (wizardStep === 5) {
+      setVal('dl-pct', '100%'); setVal('dl-eta', ''); setVal('dl-speed', '');
+      $('dl-bar-fill').style.width = '100%';
+      Object.assign(PICK, { modelId: DL.modelId, modelName: DL.modelName, filename: d.filename });
+      setTimeout(() => { goWizardStep(6); renderDoneStep(); }, 600);
+    }
+    if (currentMode === 'pro') { renderTable(); if (selectedId) openDetail(selectedId); }
+    setTimeout(() => {
+      $('progress-block').classList.add('hidden');
+      if (!(launchInfo && (launchInfo.running || launchInfo.dry_run))) $('launch-bar').classList.add('hidden');
+    }, 4000);
+  }
+}
+
+/* ══════════════════════════════════════
+   RUNTIME + LAUNCH
+══════════════════════════════════════ */
+function renderRuntimeBox(r) {
+  const box = $('runtime-box');
+  if (!r || (r.installed && !r.installing && r.stage !== 'done')) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  const track = $('runtime-track');
+  if (r.installing) {
+    track.classList.remove('hidden');
+    $('runtime-fill').style.width = r.pct + '%';
+    setVal('runtime-text', r.stage === 'extracting' ? t('rt-extracting') : t('rt-installing', { pct: Math.floor(r.pct) }));
+  } else if (r.stage === 'failed') {
+    track.classList.add('hidden');
+    setVal('runtime-text', t('rt-failed', { e: r.error }));
+  } else if (r.installed) {
+    track.classList.add('hidden');
+    setVal('runtime-text', t('rt-done', { v: r.version || r.path }));
+  } else {
+    track.classList.add('hidden');
+    setVal('runtime-text', t('rt-missing'));
+  }
+}
+
+/** Resolve once llama-server is available, installing it if needed. */
+async function ensureRuntime(onProgress) {
+  let r = await API.runtime();
+  runtimeInfo = r;
+  if (r.installed) return r;
+  if (!r.installing) r = await API.installRuntime();
+  while (r.installing) {
+    onProgress && onProgress(r);
+    await sleep(800);
+    r = await API.runtime();
+    runtimeInfo = r;
+  }
+  onProgress && onProgress(r);
+  if (!r.installed) throw new Error(t('rt-failed', { e: r.error || '?' }));
+  return r;
+}
+
+function launchParams(m, filename) {
+  const hw = hwOverride || hwData;
+  const cores = hw?.physical_cores || 4;
+  return {
+    filename,
+    ctx: m?.launch_ctx || 4096,
+    threads: Math.max(1, cores - (cores > 4 ? 1 : 0)),
+    gpu_layers: m?.gpu_layers ?? 0,
+  };
+}
+
+async function startModel(m, filename, onProgress) {
+  await ensureRuntime(onProgress);
+  const res = await API.launch(launchParams(m, filename));
+  if (!res.running) throw new Error(res.message || 'Unknown error');
+  launchInfo = res;
+  renderLaunchBar(res);
+  return res;
+}
+
+function renderDoneStep() {
+  setVal('done-model-name', t('done-downloaded', { name: PICK.modelName }));
+  setVal('cred-model', PICK.filename.split('/').pop() || '—');
+  $('cred-model-copy').dataset.copy = PICK.filename.split('/').pop() || '';
+  renderRuntimeBox(runtimeInfo);
+  const st = $('launch-state');
+  st.className = 'launch-state';
+  if (launchInfo && launchInfo.running && launchInfo.model === PICK.filename) {
+    st.classList.toggle('ok', !!launchInfo.ready);
+    st.textContent = launchInfo.ready ? t('st-running', { name: PICK.modelName }) + ' · ' + t('st-port', { port: launchInfo.port })
+                                      : t('st-loading', { name: PICK.modelName });
+  } else st.textContent = '';
+  if (launchInfo && launchInfo.base_url) {
+    setVal('cred-url', launchInfo.base_url);
+    $('cred-url-copy').dataset.copy = launchInfo.base_url;
+  }
+}
+
+async function wizardLaunch() {
+  const btn = $('btn-wizard-launch');
+  btn.disabled = true;
+  const m = allModels.find(x => x.id === PICK.modelId);
+  const st = $('launch-state');
+  st.className = 'launch-state'; st.textContent = '';
+  try {
+    await startModel(m, PICK.filename, r => renderRuntimeBox(r));
+    renderDoneStep();
+  } catch(e) {
+    st.className = 'launch-state err';
+    st.textContent = t('err-launch', { e: e.message });
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function proLaunch(id) {
+  const m = allModels.find(x => x.id === id);
+  const inst = installedFor(id, m?.quant);
+  if (!inst) { openQuantModal(id); return; }
+  try {
+    const r = await API.runtime();
+    if (!r.installed && !r.installing && !confirm(t('rt-confirm'))) return;
+    $('btn-launch').disabled = true;
+    $('launch-bar').classList.remove('hidden');
+    await startModel(m, inst.filename, rt => {
+      $('lbar-model').textContent = rt.stage === 'extracting' ? t('rt-extracting') : t('rt-installing', { pct: Math.floor(rt.pct) });
+      $('lbar-pid').textContent = '';
+    });
+  } catch(e) {
+    toast(t('err-launch', { e: e.message }), 'error', 12000);
+    if (!(launchInfo && launchInfo.running)) $('launch-bar').classList.add('hidden');
+  } finally {
+    $('btn-launch').disabled = false;
+  }
+}
+
+async function stopModel() {
+  try { await API.stop(); } catch(e) {}
+  launchInfo = null;
+  $('launch-bar').classList.add('hidden');
+  toast(t('st-stopped'));
+  if (wizardStep === 6) renderDoneStep();
+}
+
+function renderLaunchBar(st) {
+  if (DL.status === 'downloading') return;  // download progress owns the bar
+  const bar = $('launch-bar');
+  if (!st || !(st.running || st.dry_run)) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  const name = (st.model || '').split('/').pop();
+  if (st.dry_run) {
+    $('lbar-model').textContent = name;
+    $('lbar-pid').textContent = st.message;
+    $('lbar-pid').title = st.cmd || '';
+    $('lbar-open').classList.add('hidden');
+    return;
+  }
+  $('lbar-model').textContent = st.ready ? t('st-running', { name }) : t('st-loading', { name });
+  $('lbar-pid').textContent = (st.pid ? 'PID ' + st.pid + ' · ' : '') + t('st-port', { port: st.port });
+  $('lbar-pid').title = st.cmd || '';
+  const open = $('lbar-open');
+  open.href = st.chat_url;
+  open.classList.toggle('hidden', !st.ready);
+}
+
+/* ══════════════════════════════════════
+   POLLING
+══════════════════════════════════════ */
+let polling = false;
+async function pollStatus() {
+  if (polling) return;
+  polling = true;
+  try {
+    if (DL.status === 'downloading') await trackDownload();
+    const st = await API.launchStat();
+    const wasRunning = launchInfo && launchInfo.running;
+    launchInfo = (st.running || st.dry_run) ? st : null;
+    if (wasRunning && !st.running && st.message && st.message !== 'No model running.') toast(st.message, 'error', 10000);
+    renderLaunchBar(launchInfo);
+    if (wizardStep === 6) renderDoneStep();
+    if (runtimeInfo && runtimeInfo.installing) { runtimeInfo = await API.runtime(); if (wizardStep===6) renderRuntimeBox(runtimeInfo); }
+  } catch(e) { /* backend unreachable — skip this tick */ }
+  finally { polling = false; }
+}
+
+/* ══════════════════════════════════════
+   PRO TABLE
+══════════════════════════════════════ */
+async function refreshCatalog() {
+  const btn = $('btn-refresh');
+  btn.disabled = true;
+  toast(t('refreshing'));
+  try {
+    await API.refresh();
+    await Promise.all([loadModels(), refreshInstalled()]);
+    buildProviderChips(); applyFilters();
+    toast(t('refreshed', { n: allModels.length }), 'ok');
+  } catch(e) { toast(e.message, 'error'); }
+  finally { btn.disabled = false; }
+}
+
+function buildProviderChips() {
+  const counts = {};
+  allModels.forEach(m => counts[m.provider] = (counts[m.provider]||0) + 1);
+  const providers = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]).slice(0,8);
+  if (filterProvider!=='all' && !providers.includes(filterProvider)) providers.push(filterProvider);
+  const grp = $('filter-provider');
+  const lbl = grp.querySelector('.filter-label');
+  grp.innerHTML=''; grp.appendChild(lbl);
+  [['all',t('chip-all')], ...providers.map(p=>[p,p])].forEach(([val,text])=>{
+    const btn=document.createElement('button');
+    btn.className='chip'+(filterProvider===val?' active':'');
+    btn.textContent=text; btn.dataset.provider=val;
+    btn.addEventListener('click',()=>{
+      filterProvider=val;
+      document.querySelectorAll('[data-provider]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active'); applyFilters();
+    });
+    grp.appendChild(btn);
+  });
+}
+
+function applyFilters() {
+  const q=filterSearch.toLowerCase().trim();
+  filtered=allModels.filter(m=>{
+    if(q&&!m.name.toLowerCase().includes(q)&&!m.provider.toLowerCase().includes(q)&&!m.id.toLowerCase().includes(q)) return false;
+    if(filterProvider!=='all'&&m.provider!==filterProvider) return false;
+    if(filterFit!=='all'&&m.fit!==filterFit) return false;
+    if(filterUseCase!=='all'){
+      const ok = {Coding:m.is_coding, Vision:m.is_vision, Reasoning:m.is_reasoning, Chat:m.use_case==='Chat'}[filterUseCase];
+      if(!ok) return false;
+    }
+    return true;
+  });
+  const FIT={Perfect:0,Good:1,Marginal:2,'No Fit':3};
+  filtered.sort((a,b)=>{
+    if (sortCol==='fit') {  // best fit first, then strongest model, then fastest
+      const c = (FIT[a.fit]-FIT[b.fit]) || (b.score-a.score) || (b.tok_s-a.tok_s);
+      return sortDir==='asc' ? c : -c;
+    }
+    let av=a[sortCol]??0,bv=b[sortCol]??0;
+    if(typeof av==='string') av=av.toLowerCase();
+    if(typeof bv==='string') bv=bv.toLowerCase();
+    let c = av<bv ? -1 : av>bv ? 1 : 0;
+    if (sortDir==='desc') c=-c;
+    return c || (FIT[a.fit]-FIT[b.fit]);
+  });
+  $('model-count').textContent = t('model-count')(filtered.length);
+  renderTable();
+}
+
+function setSort(col) {
+  sortDir=sortCol===col?(sortDir==='desc'?'asc':'desc'):(['name','provider','fit'].includes(col)?'asc':'desc'); sortCol=col;
+  document.querySelectorAll('th.sortable').forEach(th=>{th.classList.remove('active-col');th.querySelector('.sort-arrow').textContent='';});
+  const th=document.querySelector(`th[data-col="${col}"]`);
+  if(th){th.classList.add('active-col');th.querySelector('.sort-arrow').textContent=sortDir==='desc'?'↓':'↑';}
+  applyFilters();
+}
+
+function renderTable() {
+  const tbody=$('table-body');
+  if(!filtered.length){tbody.innerHTML=`<tr class="loading-row"><td colspan="12" style="color:var(--text-3);text-align:center">No models match filters.</td></tr>`;return;}
+  const frag=document.createDocumentFragment();
+  for(const m of filtered){
+    const tr=document.createElement('tr');
+    if(m.id===selectedId) tr.classList.add('selected');
+    const moe=m.is_moe?'<span class="moe-badge">MoE</span>':'';
+    const inst=installedFor(m.id)?'<span class="inst-badge" title="Downloaded">✓</span>':'';
+    const fCls=m.fit.replace(' ','-'), mCls=m.mode.replace('+','-').replace(' ','-');
+    const memCls=m.mem_pct<=60?'mem-perfect':m.mem_pct<=80?'mem-good':m.mem_pct<=100?'mem-tight':'mem-over';
+    const memDisp=m.mem_pct>200?'>200%':m.mem_pct+'%';
+    tr.innerHTML=`
+      <td class="col-fit-dot"><span class="fit-dot ${fCls}"></span></td>
+      <td class="col-name">${esc(m.name)}${moe}${inst}</td>
+      <td class="col-provider">${esc(m.provider)}</td>
+      <td class="col-params" style="text-align:right">${esc(m.params_label)}</td>
+      <td class="col-score"><div class="score-cell"><div class="score-bar-wrap"><div class="score-bar-fill" style="width:${m.score}%"></div></div><span>${m.score}${m.bench_estimated?'<span class="est">~</span>':''}</span></div></td>
+      <td class="col-toks" style="text-align:right">${m.fit==='No Fit'?'—':m.tok_s}</td>
+      <td class="col-quant">${esc(m.quant)}</td>
+      <td class="col-mode"><span class="mode-chip ${mCls}">${esc(m.mode)}</span></td>
+      <td class="col-mem" style="text-align:right"><span class="${memCls}">${memDisp}</span></td>
+      <td class="col-ctx" style="text-align:right">${esc(m.ctx_label)}</td>
+      <td class="col-fitlabel"><span class="fit-label ${fCls}">${esc(m.fit)}</span></td>
+      <td class="col-usecase"><span class="uc-tag">${esc(m.use_case)}</span></td>`;
+    tr.addEventListener('click',()=>selectModel(m.id));
+    frag.appendChild(tr);
+  }
+  tbody.innerHTML=''; tbody.appendChild(frag);
+}
+
+function selectModel(id){
+  selectedId=id;
+  document.querySelectorAll('#table-body tr').forEach(r=>r.classList.remove('selected'));
+  const idx=filtered.findIndex(m=>m.id===id);
+  const rows=document.querySelectorAll('#table-body tr');
+  if(idx>=0&&rows[idx]) rows[idx].classList.add('selected');
+  detailRec = null;
+  openDetail(id);
+  if (detailPersona !== 'general') loadDetailRecommendation(id);
+}
+
+function fillDetailStats(r) {
+  const fe=$('d-fit'); fe.textContent=r.fit; fe.className=`stat-val fit-label ${r.fit.replace(' ','-')}`;
+  $('d-mode').textContent=r.mode; $('d-quant').textContent=r.quant;
+  $('d-toks').textContent=r.fit==='No Fit'?'—':r.tok_s+' tok/s';
+  $('d-mem').textContent=r.total_req_gb+' GB'; $('d-layers').textContent=r.gpu_layers;
+  $('d-ctx').textContent=Math.round(r.launch_ctx/1024)+'k / '+r.ctx_label; $('d-size').textContent='~'+r.size_gb+' GB';
+}
+
+function openDetail(id){
+  const m=allModels.find(x=>x.id===id); if(!m) return;
+  $('detail-panel').classList.remove('hidden');
+  $('table-wrap').classList.add('detail-open');
+  $('detail-name').textContent=m.name;
+  $('detail-meta').textContent=`${m.provider} · ${m.params_label} · ${m.family} · ctx ${m.ctx_label} · ${m.id}`;
+  const r = (detailRec && detailRec.row.id===id) ? detailRec.row : m;
+  fillDetailStats(r);
+  const e = m.bench_estimated ? '~' : '';
+  $('b-mmlu').textContent=e+m.mmlu+'%'; $('b-humaneval').textContent=e+m.humaneval+'%';
+  $('b-swe').textContent=e+m.swe_bench+'%'; $('b-gpqa').textContent=e+m.gpqa+'%'; $('b-elo').textContent=e+m.arena_elo;
+  const hw=hwOverride||hwData;
+  if (detailRec && detailRec.row.id===id) {
+    $('detail-why').textContent = detailRec.why + (m.bench_estimated ? ' ' + t('est-note') : '');
+  } else {
+    $('detail-why').textContent=t('why-tpl', { name:m.name, quant:m.quant, gpu:hw?hw.gpu.name:'GPU', mem:m.mem_pct, toks:m.tok_s })
+      + (m.bench_estimated ? ' ' + t('est-note') : '');
+  }
+  $('btn-hf-link').href=m.hf_url;
+  const inst = installedFor(m.id);
+  $('btn-download').disabled=false;
+  $('btn-launch').disabled=!inst;
+  $('btn-launch').title = inst ? inst.filename : '';
+  $('btn-delete').classList.toggle('hidden', !inst);
+  if (DL.status !== 'downloading' || DL.modelId !== id) $('progress-block').classList.add('hidden');
+}
+
+async function loadDetailRecommendation(id) {
+  try {
+    const rec = await API.recommend(id, detailPersona);
+    if (selectedId !== id) return;
+    detailRec = rec;
+    openDetail(id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function closeDetail(){
+  $('detail-panel').classList.add('hidden');
+  $('table-wrap').classList.remove('detail-open');
+  selectedId=null; detailRec=null;
+  document.querySelectorAll('#table-body tr').forEach(r=>r.classList.remove('selected'));
+}
+
+async function proDelete(id) {
+  const inst = installedFor(id);
+  if (!inst || !confirm(t('confirm-delete', { f: inst.filename }))) return;
+  try {
+    await API.deleteModel(inst.filename);
+    await refreshInstalled();
+    toast(t('deleted', { f: inst.name }), 'ok');
+    renderTable(); openDetail(id);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+/* ══════════════════════════════════════
+   QUANT PICKER (real files from HF)
+══════════════════════════════════════ */
+async function openQuantModal(id) {
+  const m = allModels.find(x => x.id === id);
+  if (!m) return;
+  const recQuant = (detailRec && detailRec.row.id===id) ? detailRec.row.quant : m.quant;
+  $('modal-model-name').textContent = m.name;
+  const list = $('quant-list');
+  list.innerHTML = `<div class="modal-note loading-text">${esc(t('modal-loading'))}</div>`;
+  $('quant-modal').classList.remove('hidden');
+
+  let groups;
+  try { groups = await API.hfFiles(id); }
+  catch(e) { list.innerHTML = `<div class="modal-note" style="color:var(--red)">${esc(e.message)}</div>`; return; }
+
+  const hw = hwOverride || hwData;
+  const pool = hw ? (hw.gpu.integrated ? hw.available_ram_gb - 1.5 : hw.gpu.free_vram_gb + hw.available_ram_gb - 1.5) : Infinity;
+  const busy = DL.status === 'downloading';
+  list.innerHTML = groups.map(g => {
+    const tooBig = g.size_gb * 1.1 + 0.5 > pool;
+    const have = installed.some(x => x.model_id === id && x.quant === g.quant && x.complete);
+    const tags = [
+      g.quant === recQuant ? `<span class="qi-tag rec">${esc(t('tag-rec'))}</span>` : '',
+      have ? `<span class="qi-tag inst">${esc(t('tag-inst'))}</span>` : '',
+      tooBig ? `<span class="qi-tag big">${esc(t('tag-big'))}</span>` : '',
+      g.shards > 1 ? `<span class="qi-tag">${esc(t('tag-shards', { n: g.shards }))}</span>` : '',
+    ].join('');
+    return `<div class="quant-item">
+      <div class="qi-left"><span class="qi-name">${esc(g.quant)}</span>
+        <span class="qi-quality">quality ~${g.quality}%</span><div class="qi-tags">${tags}</div></div>
+      <div class="qi-right"><span class="qi-size">${g.size_gb} GB</span>
+        <button class="qi-dl-btn" data-quant="${esc(g.quant)}" ${have||busy?'disabled':''}>${esc(t('btn-download'))}</button></div>
+    </div>`;
+  }).join('') || `<div class="modal-note">No GGUF files found.</div>`;
+
+  const recEl = list.querySelector('.qi-tag.rec');
+  if (recEl) recEl.closest('.quant-item').scrollIntoView({ block: 'nearest' });
+
+  list.querySelectorAll('.qi-dl-btn').forEach(btn => btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    try {
+      await beginDownload(m, btn.dataset.quant, 'pro');
+      $('quant-modal').classList.add('hidden');
+      toast(t('dl-started', { name: m.name, quant: btn.dataset.quant }));
+      if (selectedId === id) {
+        $('progress-block').classList.remove('hidden');
+        $('prog-filename').textContent = DL.filename.split('/').pop();
+        $('prog-status').textContent = t('st-queued');
+        $('prog-fill').style.width = '0%';
+      }
+    } catch(e) {
+      btn.disabled = false;
+      toast(t('err-download', { e: e.message }), 'error', 8000);
+    }
+  }));
+}
+</script>
+</body>
+</html>
