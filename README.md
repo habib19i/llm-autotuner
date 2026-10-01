@@ -119,3 +119,7 @@ work the same way with `python build.py` on those platforms.
   *active* weights — which is why mixture-of-experts models (e.g. `30B-A3B`) run fast.
 - **Benchmarks**: published scores for known models; others are estimated from size and
   shown with `~`.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
