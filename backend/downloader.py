@@ -137,6 +137,34 @@ def installed_models() -> List[Dict[str, Any]]:
             "format": "gguf",
         })
     out.extend(_installed_mlx(manifest))
+    listed = {x["filename"] for x in out}
+    active = {j.filename for j in _jobs.values() if j.status in ("queued", "downloading")}
+    for x in out:
+        meta = manifest.get(x["filename"], {})
+        x["downloaded"] = meta.get("downloaded", "")
+        x["partial"] = bool(meta.get("pending")) and not x["complete"]
+        x["active"] = x["filename"] in active
+    for rel, meta in manifest.items():
+        if not meta.get("pending") or rel in listed:
+            continue
+        have = 0
+        for f in meta.get("files", []):
+            try:
+                p = safe_model_path(f)
+            except ValueError:
+                continue
+            for c in (p, p.with_name(p.name + ".tmp")):
+                if c.exists():
+                    have += c.stat().st_size
+                    break
+        out.append({
+            "filename": rel, "name": rel.split("/")[-1], "model_id": meta.get("model_id", ""),
+            "quant": meta.get("quant", ""), "size": format_bytes(have), "size_bytes": have,
+            "shards": len(meta.get("files", [])), "complete": False, "has_mmproj": False,
+            "modified": meta.get("started", ""), "format": meta.get("format", "gguf"),
+            "downloaded": "", "partial": True, "active": rel in active,
+            "total_bytes": meta.get("total_bytes", 0),
+        })
     return out
 
 
@@ -174,7 +202,43 @@ def cancel_job(key: str) -> bool:
     return False
 
 
+def _delete_partial(rel: str, meta: Dict[str, Any]) -> bool:
+    folders = set()
+    for f in meta.get("files", []):
+        try:
+            p = safe_model_path(f)
+        except ValueError:
+            continue
+        for c in (p, p.with_name(p.name + ".tmp")):
+            if c.exists():
+                c.unlink()
+        folders.add(p.parent)
+    _update_manifest(rel, None)
+    base = MODELS_DIR.resolve()
+    for d in sorted(folders, key=lambda x: len(x.parts), reverse=True):
+        while d != base and base in d.parents:
+            try:
+                d.rmdir()  # only removes empty folders
+            except OSError:
+                break
+            d = d.parent
+    return True
+
+
 def delete_model(rel: str) -> bool:
+    meta = _read_manifest().get(rel, {})
+    if meta.get("pending"):
+        active = any(j.filename == rel and j.status in ("queued", "downloading") for j in _jobs.values())
+        if active:
+            raise ValueError("This model is still downloading — cancel the download first.")
+        try:
+            target = safe_model_path(rel)
+        except ValueError:
+            target = None
+        incomplete = target is None or not target.exists() or not any(
+            x["filename"] == rel and x["complete"] for x in installed_models())
+        if incomplete:
+            return _delete_partial(rel, meta)
     p = safe_model_path(rel)
     if p.is_dir() and p.parent == MODELS_DIR.resolve() and _is_mlx_dir(p):
         shutil.rmtree(p)
@@ -226,6 +290,10 @@ async def _fetch_file(job: DownloadJob, url: str, dest: Path, expected: int,
     if expected and done > expected:
         tmp.unlink()
         done = 0
+    # Show resumed progress immediately instead of 0% until the first new chunk arrives
+    job.downloaded_bytes = base_done + done
+    if job.total_bytes:
+        job.pct = round(min(100.0, job.downloaded_bytes / job.total_bytes * 100), 1)
 
     for attempt in range(1, MAX_RETRIES + 1):
         if _cancel.get(job.key):
@@ -325,6 +393,7 @@ async def _run_download(job: DownloadJob, files: List[Dict[str, Any]], folder: P
         if not ok:
             if job.status == "cancelled":
                 _cleanup_partial(files, folder, flat)
+                _update_manifest(job.filename, None)
             return
         base += f["size"] or dest.stat().st_size
 
@@ -427,6 +496,13 @@ def start_download(model_id: str, quant: str, plan: Dict[str, Any]) -> DownloadJ
     )
     _jobs[key] = job
     _cancel[key] = False
+    flat = plan.get("flat", True)
+    _update_manifest(job.filename, {
+        "model_id": model_id, "quant": plan["quant"], "format": plan.get("format", "gguf"),
+        "pending": True, "started": time.strftime("%Y-%m-%d %H:%M"),
+        "total_bytes": sum(f["size"] for f in plan["files"] if "mmproj" not in f["path"].lower()),
+        "files": [rel_model_path(_dest(folder, f["path"], flat)) for f in plan["files"]],
+    })
     task = asyncio.create_task(_run_download(job, plan["files"], folder, plan.get("flat", True),
                                              plan.get("format", "gguf")))
     _tasks.add(task)

@@ -192,6 +192,38 @@ def api_disk():
     return disk_info()
 
 
+class OpenFolderReq(BaseModel):
+    filename: Optional[str] = Field(None, max_length=400)
+
+
+@app.post("/api/open-folder")
+def api_open_folder(req: Optional[OpenFolderReq] = None):
+    """Show the models folder (or one model's folder) in Explorer / Finder / the file manager."""
+    import os
+    import platform
+    import subprocess
+    from .utils import MODELS_DIR, safe_model_path
+    target = MODELS_DIR
+    if req and req.filename:
+        try:
+            p = safe_model_path(req.filename)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        target = p if p.is_dir() else p.parent
+    if not target.exists():
+        raise HTTPException(404, "Folder not found")
+    try:
+        if platform.system() == "Windows":
+            os.startfile(str(target))  # noqa: S606 - local folder chosen by the app
+        elif platform.system() == "Darwin":
+            subprocess.Popen(["open", str(target)])
+        else:
+            subprocess.Popen(["xdg-open", str(target)])
+    except Exception as e:
+        raise HTTPException(500, f"Could not open the folder: {e}")
+    return {"ok": True, "path": str(target)}
+
+
 @app.get("/api/downloads")
 def api_downloads():
     return all_jobs()

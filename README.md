@@ -54,6 +54,14 @@ Closing the app's window stops the app and the model server.
 - **Storage** — where models are stored and how much space is free. Every download is
   checked against free disk space first.
 
+### My models
+
+The **My models** tab lists everything you've downloaded: size, quantization, download date,
+how well each model fits this computer, and whether it's running. Launch, stop, open the chat
+page, deploy, show in folder or delete each one with a click. Downloads that were interrupted
+(app closed, network lost) show up as *Incomplete* with a **Resume** button, and the top of
+the page shows how much disk space models use and how much is free.
+
 ### More models
 
 - The catalog combines **Unsloth, bartowski, LM Studio Community and ggml-org**. When several

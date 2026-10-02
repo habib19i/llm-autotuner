@@ -65,11 +65,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 /* Mode toggle */
 .mode-toggle{position:relative;display:flex;background:var(--surface-2);
   border:1px solid var(--border);border-radius:20px;padding:3px;gap:0}
-.mode-toggle-pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);
+.mode-toggle-pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 3);
   background:var(--surface);border:1px solid var(--border-2);border-radius:16px;
   pointer-events:none;transition:transform .22s cubic-bezier(.4,0,.2,1);box-shadow:var(--shadow-sm)}
 :root[data-theme="light"] .mode-toggle-pill{background:#fff}
 [data-active="pro"] .mode-toggle-pill{transform:translateX(100%)}
+[data-active="library"] .mode-toggle-pill{transform:translateX(200%)}
 .mode-btn{position:relative;z-index:1;background:transparent;border:none;color:var(--text-3);
   font-size:12px;font-weight:500;font-family:var(--font-ui);padding:4px 16px;border-radius:16px;
   cursor:pointer;transition:color .18s;flex:1;white-space:nowrap;text-align:center;}
@@ -462,6 +463,72 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 .toast{background:var(--surface);border:1px solid var(--border-2);border-left:3px solid var(--text-3);color:var(--text);
   padding:10px 14px;border-radius:var(--radius-sm);box-shadow:var(--shadow);font-size:12.5px;line-height:1.45;animation:wz-enter .2s ease;white-space:pre-wrap;word-break:break-word}
 .toast.error{border-left-color:var(--red)}.toast.ok{border-left-color:var(--green)}
+/* ── My models library ── */
+#library-view{position:fixed;top:var(--topbar-h);left:0;right:0;bottom:0;overflow-y:auto;background:var(--bg)}
+body.lbar-on #library-view{bottom:var(--lbar-h)}
+.lib-wrap{max-width:1180px;margin:0 auto;padding:28px 24px 48px}
+.lib-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.lib-h1{font-size:22px;font-weight:700;letter-spacing:-.03em;color:var(--text)}
+.lib-sub{font-size:12.5px;color:var(--text-3);margin-top:4px}
+.lib-storage{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:18px}
+.lib-storage-row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.lib-storage-nums{display:flex;gap:26px;flex-wrap:wrap}
+.lib-num b{display:block;font-size:18px;font-weight:650;color:var(--text);font-family:var(--font-mono);letter-spacing:-.02em}
+.lib-num span{font-size:10.5px;color:var(--text-3);text-transform:uppercase;letter-spacing:.06em}
+.lib-bar{display:flex;height:6px;border-radius:4px;overflow:hidden;background:var(--surface-3);margin:14px 0 8px}
+.lib-bar i{display:block;height:100%}
+.lib-bar .seg-models{background:#a78bfa}.lib-bar .seg-other{background:var(--border-2)}
+.lib-legend{display:flex;gap:14px;font-size:11px;color:var(--text-3);flex-wrap:wrap;align-items:center}
+.lib-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.lib-path{font-family:var(--font-mono);font-size:11px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px}
+.lib-tools{display:flex;gap:8px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+.lib-tools #lib-search{flex:1;min-width:200px;max-width:340px}
+.lib-select{background:var(--surface);border:1px solid var(--border);color:var(--text-2);font-family:var(--font-ui);font-size:12.5px;padding:6px 10px;border-radius:var(--radius-sm)}
+.lib-section-title{font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:.07em;margin:6px 0 10px;font-family:var(--font-mono)}
+.lib-dl{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:8px}
+.lib-dl-top{display:flex;justify-content:space-between;gap:10px;align-items:center;font-size:13px;color:var(--text)}
+.lib-dl-meta{font-size:11px;color:var(--text-3);font-family:var(--font-mono);margin-top:6px;display:flex;gap:14px;flex-wrap:wrap}
+.lib-dl .wz-dl-track{margin:9px 0 0}
+.lib-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
+.lib-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 16px 14px;display:flex;flex-direction:column;gap:10px;transition:border-color .15s,box-shadow .15s,transform .12s}
+.lib-card:hover{border-color:var(--border-2);box-shadow:0 6px 22px rgba(0,0,0,.18)}
+.lib-card.running{border-color:rgba(34,197,94,.45);box-shadow:0 0 0 1px rgba(34,197,94,.2)}
+.lib-card.partial{border-style:dashed}
+.lib-card-top{display:flex;gap:12px;align-items:flex-start}
+.lib-avatar{width:38px;height:38px;border-radius:10px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#fff;letter-spacing:-.02em}
+.lib-title{flex:1;min-width:0}
+.lib-title b{display:block;font-size:14px;font-weight:650;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.01em}
+.lib-title span{font-size:11.5px;color:var(--text-3)}
+.lib-status{font-size:10.5px;font-weight:600;padding:3px 8px;border-radius:20px;white-space:nowrap;font-family:var(--font-mono)}
+.lib-status.run{color:var(--green);background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3)}
+.lib-status.load{color:var(--yellow);background:rgba(212,160,23,.1);border:1px solid rgba(212,160,23,.3)}
+.lib-status.part{color:var(--orange);background:rgba(224,123,57,.1);border:1px solid rgba(224,123,57,.3)}
+.lib-tags{display:flex;gap:6px;flex-wrap:wrap}
+.lib-tag{font-size:10.5px;font-family:var(--font-mono);color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);padding:2px 7px;border-radius:5px}
+.lib-tag.mlx{color:#a78bfa;border-color:rgba(167,139,250,.4)}
+.lib-fit{font-size:12px;color:var(--text-2);display:flex;align-items:center;gap:7px}
+.lib-foot{font-size:11px;color:var(--text-3)}
+.lib-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:2px;align-items:center}
+.lib-actions .spacer{flex:1}
+.lib-icon-btn{background:transparent;border:1px solid var(--border);color:var(--text-3);width:30px;height:30px;border-radius:var(--radius-sm);cursor:pointer;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+.lib-icon-btn:hover{color:var(--text);border-color:var(--border-2);background:var(--surface-2)}
+.lib-icon-btn.danger:hover{color:var(--red);border-color:rgba(239,68,68,.4)}
+.lib-card{position:relative}
+.lib-actions .btn-primary,.lib-actions .btn-secondary,.lib-actions .btn-danger{padding:6px 13px;font-size:12px}
+.lib-more{position:absolute;right:0;bottom:36px;min-width:190px;background:var(--surface);border:1px solid var(--border-2);
+  border-radius:var(--radius-md);box-shadow:var(--shadow);padding:5px;z-index:20;animation:wz-enter .12s ease}
+.lib-more button{display:flex;align-items:center;gap:9px;width:100%;background:none;border:none;color:var(--text-2);
+  font-family:var(--font-ui);font-size:12.5px;padding:8px 10px;border-radius:6px;cursor:pointer;text-align:left}
+.lib-more button:hover{background:var(--surface-2);color:var(--text)}
+.lib-more button.danger{color:var(--red)}
+.lib-more button.danger:hover{background:rgba(239,68,68,.08)}
+.lib-more svg{flex-shrink:0;opacity:.8}
+.lib-more-wrap{position:relative}
+.lib-empty{text-align:center;padding:70px 20px;border:1px dashed var(--border-2);border-radius:var(--radius-xl);color:var(--text-3)}
+.lib-empty h3{font-size:17px;color:var(--text);margin:14px 0 6px;letter-spacing:-.02em}
+.lib-empty p{font-size:13px;margin-bottom:18px}
+.lib-empty .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+@media(max-width:600px){.lib-wrap{padding:18px 14px 40px}.lib-grid{grid-template-columns:1fr}.mode-btn{padding:4px 10px}}
 .fmt-badge{font-size:9px;font-weight:600;color:#a78bfa;border:1px solid rgba(167,139,250,.4);padding:1px 4px;border-radius:3px;vertical-align:middle;margin-left:5px}
 .lock-badge,.cust-badge{font-size:9px;border:1px solid var(--border-2);color:var(--text-3);padding:1px 4px;border-radius:3px;vertical-align:middle;margin-left:5px}
 .rt-chip{cursor:pointer;color:var(--yellow)!important}
@@ -496,6 +563,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
       <div class="mode-toggle-pill"></div>
       <button class="mode-btn active" id="btn-simple-mode" data-i18n="mode-simple">Simple</button>
       <button class="mode-btn" id="btn-pro-mode" data-i18n="mode-pro">Pro</button>
+      <button class="mode-btn" id="btn-library-mode" data-i18n="mode-library">My models</button>
     </div>
   </div>
   <div class="topbar-right">
@@ -844,6 +912,30 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
   </div>
 </div>
 
+<!-- ══════════ MY MODELS ══════════ -->
+<div id="library-view" class="hidden">
+  <div class="lib-wrap">
+    <div class="lib-head">
+      <div>
+        <div class="lib-h1" data-i18n="lib-title">My models</div>
+        <div class="lib-sub" id="lib-sub"></div>
+      </div>
+      <button class="btn-secondary" id="btn-lib-folder" data-i18n="lib-open-folder">Open models folder</button>
+    </div>
+    <div class="lib-storage" id="lib-storage"></div>
+    <div id="lib-downloads"></div>
+    <div class="lib-tools" id="lib-tools">
+      <input type="text" id="lib-search" class="hw-form-input" autocomplete="off" spellcheck="false" data-i18n-ph="lib-search" placeholder="Search your models…">
+      <select class="lib-select" id="lib-sort" aria-label="Sort">
+        <option value="recent" data-i18n="lib-sort-recent">Recently downloaded</option>
+        <option value="name" data-i18n="lib-sort-name">Name</option>
+        <option value="size" data-i18n="lib-sort-size">Size</option>
+      </select>
+    </div>
+    <div class="lib-grid" id="lib-grid"></div>
+  </div>
+</div>
+
 <!-- Hardware override modal -->
 <div id="hw-override-modal" class="modal-overlay hidden">
   <div class="modal-box">
@@ -1100,6 +1192,23 @@ const STRINGS = {
     'dl-started':'Downloading {name} ({quant})…',
     'dl-files':'file {i} of {n}',
     'remaining':'{t} left',
+    'mode-library':'My models','lib-title':'My models','lib-open-folder':'Open models folder',
+    'lib-search':'Search your models…','lib-sort-recent':'Recently downloaded','lib-sort-name':'Name','lib-sort-size':'Size',
+    'lib-sub':'{n} model(s) on this computer',
+    'lib-used':'Used by models','lib-free':'Free on this drive','lib-count':'Models',
+    'lib-legend-models':'Models','lib-legend-other':'Other files','lib-legend-free':'Free',
+    'lib-downloading':'Downloading','lib-cancel':'Cancel',
+    'lib-running':'● Running','lib-loading':'● Loading','lib-partial':'Incomplete',
+    'lib-launch':'Launch','lib-stop':'Stop','lib-deploy':'Deploy →','lib-chat':'Open chat ↗','lib-resume':'Resume download',
+    'lib-delete':'Delete','lib-folder':'Show in folder','lib-hf':'HuggingFace page',
+    'lib-dl-on':'Downloaded {d}','lib-from':'from {p}','lib-not-catalog':'Not in the catalog',
+    'lib-partial-note':'{have} of {total} downloaded — resume to finish.',
+    'lib-fit':'{fit} on this computer · ~{tok} tok/s',
+    'lib-empty-h':'No models yet','lib-empty-p':'Download a model and it will appear here, ready to launch.',
+    'lib-empty-simple':'Get a recommendation','lib-empty-pro':'Browse all models',
+    'lib-no-match':'No models match your search.',
+    'lib-open-failed':'Could not open the folder: {e}',
+    
     'filter-format':'Format','set-mlx-title':'MLX runtime (Apple Silicon)',
     'mlx-desc-installed':'Installed: mlx-lm {v}. MLX models (marked MLX) run with Apple\'s MLX engine, often faster than GGUF on M-series Macs.',
     'mlx-desc-missing':'Not installed yet. It is set up automatically (about 250 MB, one time) the first time you launch an MLX model.',
@@ -1227,6 +1336,23 @@ const STRINGS = {
     'dl-started':'正在下载 {name}（{quant}）…',
     'dl-files':'第 {i}/{n} 个文件',
     'remaining':'剩余 {t}',
+    'mode-library':'我的模型','lib-title':'我的模型','lib-open-folder':'打开模型文件夹',
+    'lib-search':'搜索您的模型…','lib-sort-recent':'最近下载','lib-sort-name':'名称','lib-sort-size':'大小',
+    'lib-sub':'这台电脑上有 {n} 个模型',
+    'lib-used':'模型占用','lib-free':'该磁盘剩余','lib-count':'模型数',
+    'lib-legend-models':'模型','lib-legend-other':'其他文件','lib-legend-free':'可用',
+    'lib-downloading':'正在下载','lib-cancel':'取消',
+    'lib-running':'● 运行中','lib-loading':'● 加载中','lib-partial':'未完成',
+    'lib-launch':'启动','lib-stop':'停止','lib-deploy':'部署 →','lib-chat':'打开聊天 ↗','lib-resume':'继续下载',
+    'lib-delete':'删除','lib-folder':'在文件夹中显示','lib-hf':'HuggingFace 页面',
+    'lib-dl-on':'下载于 {d}','lib-from':'来自 {p}','lib-not-catalog':'不在目录中',
+    'lib-partial-note':'已下载 {have} / {total} — 继续下载即可完成。',
+    'lib-fit':'在本机{fit} · 约 {tok} tok/s',
+    'lib-empty-h':'还没有模型','lib-empty-p':'下载模型后会显示在这里，随时可以启动。',
+    'lib-empty-simple':'获取推荐','lib-empty-pro':'浏览全部模型',
+    'lib-no-match':'没有符合搜索条件的模型。',
+    'lib-open-failed':'无法打开文件夹：{e}',
+    
     'filter-format':'格式','set-mlx-title':'MLX 运行时（Apple Silicon）',
     'mlx-desc-installed':'已安装：mlx-lm {v}。MLX 模型（标记为 MLX）使用 Apple 的 MLX 引擎运行，在 M 系列 Mac 上通常比 GGUF 更快。',
     'mlx-desc-missing':'尚未安装。首次启动 MLX 模型时会自动安装（约 250 MB，仅需一次）。',
@@ -1347,6 +1473,7 @@ const API = {
   clearToken:     ()           => req('/api/settings/hf-token', { method:'DELETE' }),
   regenKey:       ()           => post('/api/settings/api-key/regenerate'),
   disk:           ()           => req('/api/disk'),
+  openFolder:     (filename)   => post('/api/open-folder', filename ? { filename } : undefined),
   benchInfo:      ()           => req('/api/benchmarks/info'),
   addCustom:      (url)        => post('/api/models/custom', { url }),
   removeCustom:   (id)         => req('/api/models/custom/' + encodeURI(id), { method:'DELETE' }),
@@ -1409,13 +1536,16 @@ function renderHwChips() {
 function setMode(mode) {
   currentMode = mode;
   const tog = $('mode-toggle');
-  const simple = mode === 'simple';
+  const simple = mode === 'simple', library = mode === 'library';
   $('simple-view').style.display = simple ? 'flex' : 'none';
-  $('pro-view').classList.toggle('hidden', simple);
+  $('pro-view').classList.toggle('hidden', mode !== 'pro');
+  $('library-view').classList.toggle('hidden', !library);
   $('btn-simple-mode').classList.toggle('active', simple);
-  $('btn-pro-mode').classList.toggle('active', !simple);
+  $('btn-pro-mode').classList.toggle('active', mode === 'pro');
+  $('btn-library-mode').classList.toggle('active', library);
   if (tog) tog.dataset.active = mode;
-  document.querySelectorAll('[data-pro-only]').forEach(el => el.style.display = simple ? 'none' : '');
+  document.querySelectorAll('[data-pro-only]').forEach(el => el.style.display = mode === 'pro' ? '' : 'none');
+  if (library) { openLibrary(); return; }
   if (simple) return;
   renderHwChips();
   if (!hwData) API.hardware().then(hw => { hwData = hw; renderHwChips(); }).catch(()=>{});
@@ -1448,6 +1578,14 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-theme').addEventListener('click', () => setTheme(currentTheme==='dark'?'light':'dark'));
   $('btn-simple-mode').addEventListener('click', () => setMode('simple'));
   $('btn-pro-mode').addEventListener('click', () => setMode('pro'));
+  $('btn-library-mode').addEventListener('click', () => setMode('library'));
+  document.addEventListener('click', () => document.querySelectorAll('.lib-more').forEach(m => m.remove()));
+  $('lib-search').addEventListener('input', () => renderLibraryGrid(true));
+  $('lib-sort').addEventListener('change', () => renderLibraryGrid(true));
+  $('btn-lib-folder').addEventListener('click', () => API.openFolder().catch(e => toast(t('lib-open-failed', { e: e.message }), 'error')));
+  const bar = $('launch-bar');
+  new MutationObserver(() => document.body.classList.toggle('lbar-on', !bar.classList.contains('hidden')))
+    .observe(bar, { attributes: true, attributeFilter: ['class'] });
   $('btn-lang-en').addEventListener('click', () => setLang('en'));
   $('btn-lang-zh').addEventListener('click', () => setLang('zh'));
   $('btn-scan').addEventListener('click', startScan);
@@ -2088,6 +2226,7 @@ async function pollStatus() {
     if (wasRunning && !st.running && st.message && st.message !== 'No model running.') toast(st.message, 'error', 10000);
     renderLaunchBar(launchInfo);
     if (wizardStep === 6) renderDoneStep();
+    if (currentMode === 'library') await refreshLibrary();
     if (runtimeInfo && runtimeInfo.installing) {
       runtimeInfo = await API.runtime();
       if (wizardStep===6) renderRuntimeBox(runtimeInfo);
@@ -2549,6 +2688,242 @@ function proDeploy(id) {
   const inst = installedFor(id, m.quant);
   if (inst) openDeployPage(m.id, m.name, inst.filename);
   else openQuantModal(id, true);  // download first; the Deploy page opens when it finishes
+}
+
+/* ══════════════════════════════════════
+   MY MODELS LIBRARY
+══════════════════════════════════════ */
+const LIB = { disk: null, jobs: [], sig: '' };
+const AVATAR = ['#7c3aed', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#db2777', '#4f46e5'];
+
+function libModelFor(item) {
+  if (!item.model_id) return null;
+  return allModels.find(m => m.id === item.model_id || (m.sources || []).includes(item.model_id)) || null;
+}
+
+function prettyName(filename) {
+  const base = filename.split('/').pop().replace(/\.gguf$/i, '').replace(/-\d{5}-of-\d{5}$/, '');
+  return base.replace(/[-_.](?:UD-)?(?:I?Q\d[\w]*|BF16|F16|F32|\d+bit[\w-]*|bf16|MXFP4[\w-]*)$/i, '').replace(/[-_]/g, ' ');
+}
+
+function gbStr(bytes) { return (bytes / 1073741824).toFixed(bytes >= 10 * 1073741824 ? 0 : 1) + ' GB'; }
+
+async function openLibrary() {
+  if (!allModels.length) loadModels().then(() => renderLibraryGrid(true)).catch(() => {});
+  if (!hwData) API.hardware().then(hw => { hwData = hw; }).catch(() => {});
+  await refreshLibrary(true);
+}
+
+async function refreshLibrary(force) {
+  try {
+    const [inst, jobs, disk] = await Promise.all([API.installed(), API.downloads(), API.disk()]);
+    installed = inst; LIB.jobs = jobs; LIB.disk = disk;
+  } catch(e) { return; }
+  renderLibraryHeader();
+  renderLibraryDownloads();
+  renderLibraryGrid(force);
+}
+
+function renderLibraryHeader() {
+  const done = installed.filter(x => x.complete);
+  setVal('lib-sub', t('lib-sub', { n: done.length }));
+  const d = LIB.disk;
+  if (!d) return;
+  const used = d.total_bytes - d.free_bytes;
+  const other = Math.max(0, used - d.models_bytes);
+  const pct = x => (100 * x / Math.max(d.total_bytes, 1)).toFixed(2) + '%';
+  $('lib-storage').innerHTML = `
+    <div class="lib-storage-row">
+      <div class="lib-storage-nums">
+        <div class="lib-num"><b>${done.length}</b><span>${esc(t('lib-count'))}</span></div>
+        <div class="lib-num"><b>${gbStr(d.models_bytes)}</b><span>${esc(t('lib-used'))}</span></div>
+        <div class="lib-num"><b>${gbStr(d.free_bytes)}</b><span>${esc(t('lib-free'))}</span></div>
+      </div>
+      <div class="lib-path" title="${esc(d.path)}">${esc(d.path)}</div>
+    </div>
+    <div class="lib-bar"><i class="seg-models" style="width:${pct(d.models_bytes)}"></i><i class="seg-other" style="width:${pct(other)}"></i></div>
+    <div class="lib-legend">
+      <span><i style="background:#a78bfa"></i>${esc(t('lib-legend-models'))}</span>
+      <span><i style="background:var(--border-2)"></i>${esc(t('lib-legend-other'))}</span>
+      <span><i style="background:var(--surface-3)"></i>${esc(t('lib-legend-free'))}</span>
+    </div>`;
+}
+
+function renderLibraryDownloads() {
+  const active = LIB.jobs.filter(j => j.status === 'queued' || j.status === 'downloading');
+  const box = $('lib-downloads');
+  if (!active.length) { box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="lib-section-title">${esc(t('lib-downloading'))}</div>` + active.map(j => {
+    const m = allModels.find(x => x.id === j.model_id || (x.sources || []).includes(j.model_id));
+    const name = m ? m.name : prettyName(j.filename);
+    const eta = j.eta_s > 0 ? t('remaining', { t: formatEta(j.eta_s) }) : '';
+    return `<div class="lib-dl">
+      <div class="lib-dl-top"><span><b>${esc(name)}</b> <span class="lib-tag">${esc(j.quant)}</span></span>
+        <button class="btn-secondary" data-cancel="${esc(j.key)}">${esc(t('lib-cancel'))}</button></div>
+      <div class="wz-dl-track"><div class="wz-dl-fill" style="width:${j.pct}%"></div></div>
+      <div class="lib-dl-meta"><span>${Math.floor(j.pct)}% · ${gbStr(j.downloaded_bytes)} / ${gbStr(j.total_bytes)}</span>
+        <span>${j.speed_mbs > 0 ? j.speed_mbs.toFixed(1) + ' MB/s' : ''}</span><span>${esc(eta)}</span>
+        ${j.file_count > 1 ? `<span>${esc(t('dl-files', { i: j.file_index || 1, n: j.file_count }))}</span>` : ''}</div>
+    </div>`;
+  }).join('');
+  box.querySelectorAll('[data-cancel]').forEach(b => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { await API.cancel(b.dataset.cancel); } catch(e) {}
+    if (DL.key === b.dataset.cancel) DL.status = 'idle';
+    refreshLibrary(true);
+  }));
+}
+
+function renderLibraryGrid(force) {
+  const q = $('lib-search').value.toLowerCase().trim();
+  const sort = $('lib-sort').value;
+  const running = launchInfo && launchInfo.running ? launchInfo.model : '';
+  const items = installed.filter(x => !(x.active && !x.complete)).map(x => {
+    const m = libModelFor(x);
+    return { ...x, m, display: m ? m.name : prettyName(x.filename) };
+  }).filter(x => !q || x.display.toLowerCase().includes(q) || x.filename.toLowerCase().includes(q));
+  items.sort((a, b) =>
+    sort === 'name' ? a.display.localeCompare(b.display) :
+    sort === 'size' ? b.size_bytes - a.size_bytes :
+    (b.downloaded || b.modified || '').localeCompare(a.downloaded || a.modified || ''));
+
+  // Re-render only when something visible changed (keeps hover/focus stable while polling)
+  const sig = JSON.stringify([q, sort, running, launchInfo && launchInfo.ready, allModels.length,
+                              items.map(x => [x.filename, x.complete, x.size_bytes, x.partial])]);
+  if (!force && sig === LIB.sig) return;
+  if (!force && document.querySelector('.lib-more')) return;  // user has a menu open
+  LIB.sig = sig;
+
+  const grid = $('lib-grid');
+  $('lib-tools').classList.toggle('hidden', !installed.length);
+  if (!installed.length || (!items.length && !q)) {
+    grid.style.display = 'block';
+    grid.innerHTML = `<div class="lib-empty">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <h3>${esc(t('lib-empty-h'))}</h3><p>${esc(t('lib-empty-p'))}</p>
+      <div class="row"><button class="btn-primary" id="lib-go-simple">${esc(t('lib-empty-simple'))}</button>
+      <button class="btn-secondary" id="lib-go-pro">${esc(t('lib-empty-pro'))}</button></div></div>`;
+    $('lib-go-simple').addEventListener('click', () => setMode('simple'));
+    $('lib-go-pro').addEventListener('click', () => setMode('pro'));
+    return;
+  }
+  grid.style.display = '';
+  if (!items.length) { grid.innerHTML = `<div class="lib-empty"><p>${esc(t('lib-no-match'))}</p></div>`; return; }
+
+  grid.innerHTML = '';
+  for (const x of items) grid.appendChild(libraryCard(x, running));
+}
+
+function libraryCard(x, running) {
+  const m = x.m;
+  const isRun = running && running === x.filename;
+  const ready = isRun && launchInfo.ready;
+  const card = document.createElement('div');
+  card.className = 'lib-card' + (isRun ? ' running' : '') + (x.partial ? ' partial' : '');
+  const color = AVATAR[[...(m ? m.provider : x.display)].reduce((a, c) => a + c.charCodeAt(0), 0) % AVATAR.length];
+  const initial = esc((m ? m.provider : x.display).trim()[0] || '?').toUpperCase();
+  const status = x.partial ? `<span class="lib-status part">${esc(t('lib-partial'))}</span>` :
+                 isRun ? `<span class="lib-status ${ready ? 'run' : 'load'}">${esc(t(ready ? 'lib-running' : 'lib-loading'))}</span>` : '';
+  const sub = m ? `${m.provider} · ${m.params_label}` : t('lib-not-catalog');
+  const fmt = x.format === 'mlx' ? '<span class="lib-tag mlx">MLX</span>' : '<span class="lib-tag">GGUF</span>';
+  const fitLine = m && !x.partial ? `<div class="lib-fit"><span class="fit-dot ${m.fit.replace(' ', '-')}"></span>${esc(t('lib-fit', { fit: m.fit, tok: m.tok_s }))}</div>` : '';
+  const foot = x.partial
+    ? t('lib-partial-note', { have: gbStr(x.size_bytes), total: gbStr(x.total_bytes || x.size_bytes) })
+    : [x.downloaded ? t('lib-dl-on', { d: x.downloaded.slice(0, 10) }) : '', x.model_id ? t('lib-from', { p: x.model_id.split('/')[0] }) : '']
+        .filter(Boolean).join(' · ');
+  card.innerHTML = `
+    <div class="lib-card-top">
+      <div class="lib-avatar" style="background:${color}">${initial}</div>
+      <div class="lib-title"><b title="${esc(x.filename)}">${esc(x.display)}</b><span>${esc(sub)}</span></div>
+      ${status}
+    </div>
+    <div class="lib-tags">${fmt}<span class="lib-tag">${esc(x.quant || '—')}</span><span class="lib-tag">${esc(x.partial ? gbStr(x.total_bytes || x.size_bytes) : x.size)}</span>
+      ${x.shards > 1 ? `<span class="lib-tag">${esc(t('tag-shards', { n: x.shards }))}</span>` : ''}${x.has_mmproj ? '<span class="lib-tag">vision</span>' : ''}</div>
+    ${fitLine}
+    <div class="lib-foot">${esc(foot)}</div>
+    <div class="lib-actions"></div>`;
+
+  const acts = card.querySelector('.lib-actions');
+  const btn = (label, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.addEventListener('click', fn); acts.appendChild(b); return b; };
+  const icon = (glyph, title, fn, danger) => { const b = document.createElement('button'); b.className = 'lib-icon-btn' + (danger ? ' danger' : ''); b.textContent = glyph; b.title = title; b.setAttribute('aria-label', title); b.addEventListener('click', fn); acts.appendChild(b); };
+
+  if (x.partial) {
+    if (x.model_id) btn(t('lib-resume'), 'btn-primary', async e => {
+      e.target.disabled = true;
+      try { await beginDownload(m || { id: x.model_id, name: x.display }, x.quant, 'library', x.model_id); refreshLibrary(true); }
+      catch(err) { e.target.disabled = false; toast(t('err-download', { e: err.message }), 'error', 10000); }
+    });
+  } else if (isRun) {
+    if (ready && launchInfo.chat_url) btn(t('lib-chat'), 'btn-primary', () => {
+      window.open(launchInfo.chat_url, '_blank', 'noopener');
+      const key = settingsInfo && settingsInfo.api_key;
+      if (key && navigator.clipboard) navigator.clipboard.writeText(key).then(() => toast(t('key-copied-chat'), '', 8000)).catch(() => {});
+    });
+    btn(t('lib-stop'), 'btn-danger', async () => { await stopModel(); refreshLibrary(true); });
+  } else {
+    btn(t('lib-launch'), 'btn-primary', e => libLaunch(x, e.target));
+  }
+  if (!x.partial) btn(t('lib-deploy'), 'btn-secondary', () => openDeployPage(m ? m.id : x.model_id, x.display, x.filename));
+  const sp = document.createElement('span'); sp.className = 'spacer'; acts.appendChild(sp);
+
+  // Secondary actions live in a "⋯" menu to keep cards clean
+  const ICON = {
+    folder: '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+    link: '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+    trash: '<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m5 0V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2"/>',
+  };
+  const svg = k => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICON[k]}</svg>`;
+  const wrap = document.createElement('div'); wrap.className = 'lib-more-wrap';
+  const more = document.createElement('button');
+  more.className = 'lib-icon-btn'; more.title = more.ariaLabel = 'More';
+  more.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>';
+  wrap.appendChild(more); acts.appendChild(wrap);
+  more.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = wrap.querySelector('.lib-more');
+    document.querySelectorAll('.lib-more').forEach(m => m.remove());
+    if (open) return;
+    const menu = document.createElement('div'); menu.className = 'lib-more';
+    const item = (k, label, fn, danger) => {
+      const b = document.createElement('button'); if (danger) b.className = 'danger';
+      b.innerHTML = svg(k) + `<span>${esc(label)}</span>`;
+      b.addEventListener('click', ev => { ev.stopPropagation(); menu.remove(); fn(); });
+      menu.appendChild(b);
+    };
+    if (!x.partial) item('folder', t('lib-folder'), () => API.openFolder(x.filename).catch(err => toast(t('lib-open-failed', { e: err.message }), 'error')));
+    if (x.model_id) item('link', t('lib-hf'), () => window.open(`https://huggingface.co/${x.model_id}`, '_blank', 'noopener'));
+    item('trash', t('lib-delete'), async () => {
+      if (!confirm(t('confirm-delete', { f: x.display + ' (' + (x.partial ? gbStr(x.size_bytes) : x.size) + ')' }))) return;
+      try {
+        if (isRun) await stopModel();
+        await API.deleteModel(x.filename);
+        toast(t('deleted', { f: x.display }), 'ok');
+        refreshLibrary(true);
+      } catch(err) { toast(err.message, 'error'); }
+    }, true);
+    wrap.appendChild(menu);
+  });
+  return card;
+}
+
+async function libLaunch(x, button) {
+  const m = x.m;
+  const mlx = x.format === 'mlx';
+  try {
+    const r = mlx ? await API.mlxRuntime() : await API.runtime();
+    if (!r.installed && !r.installing && !confirm(t(mlx ? 'mlx-confirm' : 'rt-confirm'))) return;
+    button.disabled = true;
+    $('launch-bar').classList.remove('hidden');
+    await startModel(m, x.filename, (rt, isMlx) => {
+      $('lbar-model').textContent = runtimeProgressText(rt, isMlx);
+      $('lbar-pid').textContent = '';
+    });
+    refreshLibrary(true);
+  } catch(e) {
+    toast(t('err-launch', { e: e.message }) + cudaHint(), 'error', 15000);
+    if (!(launchInfo && launchInfo.running)) $('launch-bar').classList.add('hidden');
+    button.disabled = false;
+  }
 }
 
 </script>
