@@ -65,12 +65,17 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 /* Mode toggle */
 .mode-toggle{position:relative;display:flex;background:var(--surface-2);
   border:1px solid var(--border);border-radius:20px;padding:3px;gap:0}
-.mode-toggle-pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px) / 3);
+.mode-toggle-pill{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);
   background:var(--surface);border:1px solid var(--border-2);border-radius:16px;
   pointer-events:none;transition:transform .22s cubic-bezier(.4,0,.2,1);box-shadow:var(--shadow-sm)}
 :root[data-theme="light"] .mode-toggle-pill{background:#fff}
 [data-active="pro"] .mode-toggle-pill{transform:translateX(100%)}
-[data-active="library"] .mode-toggle-pill{transform:translateX(200%)}
+[data-active="library"] .mode-toggle-pill{opacity:0}
+.lib-btn{position:relative}
+.lib-btn.active{background:var(--surface-2);border-color:var(--border-2);color:var(--text)}
+.lib-badge{font-size:10px;font-weight:600;font-family:var(--font-mono);background:#7c3aed;color:#fff;border-radius:9px;padding:0 6px;line-height:16px;min-width:16px;text-align:center}
+.lib-badge:empty{display:none}
+@media(max-width:700px){.lib-btn .lib-btn-label{display:none}}
 .mode-btn{position:relative;z-index:1;background:transparent;border:none;color:var(--text-3);
   font-size:12px;font-weight:500;font-family:var(--font-ui);padding:4px 16px;border-radius:16px;
   cursor:pointer;transition:color .18s;flex:1;white-space:nowrap;text-align:center;}
@@ -563,7 +568,6 @@ body.lbar-on #library-view{bottom:var(--lbar-h)}
       <div class="mode-toggle-pill"></div>
       <button class="mode-btn active" id="btn-simple-mode" data-i18n="mode-simple">Simple</button>
       <button class="mode-btn" id="btn-pro-mode" data-i18n="mode-pro">Pro</button>
-      <button class="mode-btn" id="btn-library-mode" data-i18n="mode-library">My models</button>
     </div>
   </div>
   <div class="topbar-right">
@@ -579,6 +583,10 @@ body.lbar-on #library-view{bottom:var(--lbar-h)}
       <button class="lang-btn" id="btn-lang-zh">中文</button>
     </div>
     <span class="hw-chip rt-chip hidden" id="rt-chip" title="Open settings"></span>
+    <button class="icon-btn lib-btn" id="btn-library-mode" title="My models">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+      <span class="lib-btn-label" data-i18n="mode-library">My models</span><span class="lib-badge" id="lib-badge"></span>
+    </button>
     <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings">⚙</button>
     <button class="icon-btn" id="btn-theme" aria-label="Toggle theme"><span id="theme-icon">☀️</span></button>
   </div>
@@ -1485,7 +1493,8 @@ const API = {
 };
 
 const loadModels = () => (hwOverride ? API.modelsOverride(hwOverride) : API.models()).then(m => { allModels = m; return m; });
-const refreshInstalled = () => API.installed().then(list => { installed = list; return list; }).catch(() => installed);
+const refreshInstalled = () => API.installed().then(list => { installed = list; updateLibBadge(); return list; }).catch(() => installed);
+function updateLibBadge() { const n = installed.filter(x => x.complete).length; setVal('lib-badge', n ? String(n) : ''); }
 
 function installedFor(modelId, quant) {
   const m = allModels.find(x => x.id === modelId);
@@ -2718,6 +2727,7 @@ async function refreshLibrary(force) {
   try {
     const [inst, jobs, disk] = await Promise.all([API.installed(), API.downloads(), API.disk()]);
     installed = inst; LIB.jobs = jobs; LIB.disk = disk;
+    updateLibBadge();
   } catch(e) { return; }
   renderLibraryHeader();
   renderLibraryDownloads();
