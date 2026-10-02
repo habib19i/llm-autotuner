@@ -20,3 +20,25 @@ jobs:
           cache: pip
       - run: python -m pip install -r requirements-dev.txt
       - run: python -m pytest -q
+
+  # Real MLX run on an Apple Silicon runner: install the MLX runtime through the app,
+  # download a small MLX model, launch it and chat through the authenticated gateway.
+  mlx-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: MLX end-to-end
+        run: |
+          export AUTOTUNER_HOME="$RUNNER_TEMP/autotuner-mlx"
+          python main.py --no-browser --port 8765 > app.log 2>&1 &
+          python scripts/mlx_smoke.py http://127.0.0.1:8765
+      - name: Logs on failure
+        if: failure()
+        run: |
+          cat app.log || true
+          cat "$RUNNER_TEMP/autotuner-mlx/logs/model-server.log" || true

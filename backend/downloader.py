@@ -19,7 +19,9 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Set
 import httpx
 from pydantic import BaseModel
-from .model_repository import REPO_ID_RE, quant_files, mmproj_file, find_model, quant_from_filename
+from .model_repository import (REPO_ID_RE, quant_files, mmproj_file, find_model, quant_from_filename,
+                               mlx_wanted_file, mlx_quant_label, _mlx_files_ok)
+from . import model_repository as _repo
 from .utils import MODELS_DIR, get_logger, format_bytes, safe_model_path, rel_model_path, hf_headers
 
 logger = get_logger("downloader")
@@ -132,6 +134,35 @@ def installed_models() -> List[Dict[str, Any]]:
             "complete": complete,
             "has_mmproj": any("mmproj" in x.name.lower() for x in f.parent.glob("*.gguf")),
             "modified": time.strftime("%Y-%m-%d %H:%M", time.localtime(f.stat().st_mtime)),
+            "format": "gguf",
+        })
+    out.extend(_installed_mlx(manifest))
+    return out
+
+
+def _is_mlx_dir(d: Path) -> bool:
+    return d.is_dir() and (d / "config.json").exists() and any(d.glob("*.safetensors")) \
+        and not any(d.glob("*.gguf"))
+
+
+def _installed_mlx(manifest: Dict[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out = []
+    for d in sorted(x for x in MODELS_DIR.iterdir() if x.is_dir()):
+        if not _is_mlx_dir(d):
+            continue
+        files = [f for f in d.rglob("*") if f.is_file()]
+        size = sum(f.stat().st_size for f in files if not f.name.endswith(".tmp"))
+        rel = rel_model_path(d)
+        meta = manifest.get(rel, {})
+        partial = any(f.name.endswith(".tmp") for f in files)
+        complete = not partial and (not meta.get("total_bytes") or size >= meta["total_bytes"])
+        out.append({
+            "filename": rel, "name": d.name, "model_id": meta.get("model_id", ""),
+            "quant": meta.get("quant") or mlx_quant_label(d.name)[1],
+            "size": format_bytes(size), "size_bytes": size, "shards": 1, "complete": complete,
+            "has_mmproj": False,
+            "modified": time.strftime("%Y-%m-%d %H:%M", time.localtime(d.stat().st_mtime)),
+            "format": "mlx",
         })
     return out
 
@@ -145,6 +176,10 @@ def cancel_job(key: str) -> bool:
 
 def delete_model(rel: str) -> bool:
     p = safe_model_path(rel)
+    if p.is_dir() and p.parent == MODELS_DIR.resolve() and _is_mlx_dir(p):
+        shutil.rmtree(p)
+        _update_manifest(rel, None)
+        return True
     if not p.exists() or p.suffix.lower() != ".gguf":
         return False
     for part in _shard_siblings(p):
@@ -268,16 +303,28 @@ async def _fetch_file(job: DownloadJob, url: str, dest: Path, expected: int,
     return True
 
 
-async def _run_download(job: DownloadJob, files: List[Dict[str, Any]], folder: Path):
+def _dest(folder: Path, path: str, flat: bool) -> Path:
+    """GGUF shards are flattened into the model folder; MLX repos keep their layout."""
+    if flat:
+        return folder / path.split("/")[-1]
+    d = (folder / path).resolve()
+    if folder.resolve() not in d.parents:
+        raise ValueError(f"Unsafe path in repository: {path}")
+    d.parent.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+async def _run_download(job: DownloadJob, files: List[Dict[str, Any]], folder: Path, flat: bool = True,
+                        fmt: str = "gguf"):
     clock = {"start": time.time(), "session_bytes": 0}
     base = 0
     for i, f in enumerate(files, 1):
         job.file_index = i
-        dest = folder / f["path"].split("/")[-1]
+        dest = _dest(folder, f["path"], flat)
         ok = await _fetch_file(job, _hf_url(job.model_id, f["path"]), dest, f["size"], base, clock)
         if not ok:
             if job.status == "cancelled":
-                _cleanup_partial(files, folder)
+                _cleanup_partial(files, folder, flat)
             return
         base += f["size"] or dest.stat().st_size
 
@@ -288,13 +335,15 @@ async def _run_download(job: DownloadJob, files: List[Dict[str, Any]], folder: P
     _update_manifest(job.filename, {"model_id": job.model_id, "quant": job.quant,
                                     "total_bytes": sum(f["size"] for f in files
                                                        if "mmproj" not in f["path"].lower()),
+                                    "format": fmt,
                                     "downloaded": time.strftime("%Y-%m-%d %H:%M")})
     logger.info(f"Download complete: {job.filename} ({format_bytes(job.total_bytes)})")
 
 
-def _cleanup_partial(files: List[Dict[str, Any]], folder: Path):
+def _cleanup_partial(files: List[Dict[str, Any]], folder: Path, flat: bool = True):
     for f in files:
-        tmp = folder / (f["path"].split("/")[-1] + ".tmp")
+        d = _dest(folder, f["path"], flat)
+        tmp = d.with_name(d.name + ".tmp")
         if tmp.exists():
             try:
                 tmp.unlink()
@@ -306,6 +355,9 @@ def resolve_download(model_id: str, quant: str) -> Dict[str, Any]:
     """Files to fetch for (model, quant). Blocking (HF API call) — run in a thread."""
     if not REPO_ID_RE.match(model_id):
         raise ValueError("Invalid model id")
+    tree = _repo.repo_tree(model_id)  # via the module so tests can stub it
+    if _mlx_files_ok([f["path"] for f in tree]):
+        return _resolve_mlx(model_id, tree)
     groups = quant_files(model_id)
     group = next((g for g in groups if g["quant"].upper() == quant.upper()), None)
     if group is None:
@@ -328,12 +380,35 @@ def resolve_download(model_id: str, quant: str) -> Dict[str, Any]:
         tmp = dest.with_name(dest.name + ".tmp")
         have = dest.stat().st_size if dest.exists() else (tmp.stat().st_size if tmp.exists() else 0)
         need += max(0, f["size"] - have)
+    _check_space(need)
+    return {"files": files, "folder": folder, "primary": primary, "quant": group["quant"], "need": need,
+            "flat": True, "format": "gguf"}
+
+
+def _check_space(need: int):
     free = shutil.disk_usage(MODELS_DIR).free
     if need + DISK_RESERVE > free:
         raise DiskSpaceError(f"Not enough disk space: this download needs {need / 1024 ** 3:.1f} GB "
                              f"but only {free / 1024 ** 3:.1f} GB is free on the drive holding "
                              f"{MODELS_DIR} (1 GB is kept free for the system).")
-    return {"files": files, "folder": folder, "primary": primary, "quant": group["quant"], "need": need}
+
+
+def _resolve_mlx(model_id: str, tree: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """An MLX model is the whole repository (weights, config, tokenizer) in its own folder."""
+    files = [f for f in tree if mlx_wanted_file(f["path"])]
+    folder = _local_folder(model_id)
+    entry = find_model(model_id)
+    quant = next((q.quant for q in entry.quants if q.filename == model_id), None) if entry else None
+    quant = quant or mlx_quant_label(model_id.split("/")[-1])[1]
+    need = 0
+    for f in files:
+        dest = _dest(folder, f["path"], flat=False)
+        tmp = dest.with_name(dest.name + ".tmp")
+        have = dest.stat().st_size if dest.exists() else (tmp.stat().st_size if tmp.exists() else 0)
+        need += max(0, f["size"] - have)
+    _check_space(need)
+    return {"files": files, "folder": folder, "primary": folder, "quant": quant, "need": need,
+            "flat": False, "format": "mlx"}
 
 
 def start_download(model_id: str, quant: str, plan: Dict[str, Any]) -> DownloadJob:
@@ -352,7 +427,8 @@ def start_download(model_id: str, quant: str, plan: Dict[str, Any]) -> DownloadJ
     )
     _jobs[key] = job
     _cancel[key] = False
-    task = asyncio.create_task(_run_download(job, plan["files"], folder))
+    task = asyncio.create_task(_run_download(job, plan["files"], folder, plan.get("flat", True),
+                                             plan.get("format", "gguf")))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
     return job

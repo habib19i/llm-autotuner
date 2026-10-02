@@ -462,6 +462,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 .toast{background:var(--surface);border:1px solid var(--border-2);border-left:3px solid var(--text-3);color:var(--text);
   padding:10px 14px;border-radius:var(--radius-sm);box-shadow:var(--shadow);font-size:12.5px;line-height:1.45;animation:wz-enter .2s ease;white-space:pre-wrap;word-break:break-word}
 .toast.error{border-left-color:var(--red)}.toast.ok{border-left-color:var(--green)}
+.fmt-badge{font-size:9px;font-weight:600;color:#a78bfa;border:1px solid rgba(167,139,250,.4);padding:1px 4px;border-radius:3px;vertical-align:middle;margin-left:5px}
 .lock-badge,.cust-badge{font-size:9px;border:1px solid var(--border-2);color:var(--text-3);padding:1px 4px;border-radius:3px;vertical-align:middle;margin-left:5px}
 .rt-chip{cursor:pointer;color:var(--yellow)!important}
 .bench-src{font-size:10.5px;color:var(--text-3);padding:0 16px 4px;flex-shrink:0}
@@ -751,6 +752,12 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
         <button class="chip" data-fit="Good" data-i18n="chip-good">Good</button>
         <button class="chip" data-fit="Marginal" data-i18n="chip-marginal">Marginal</button>
       </div>
+      <div class="filter-group hidden" id="filter-format">
+        <span class="filter-label" data-i18n="filter-format">Format</span>
+        <button class="chip active" data-format="all" data-i18n="chip-all">All</button>
+        <button class="chip" data-format="gguf">GGUF</button>
+        <button class="chip" data-format="mlx">MLX</button>
+      </div>
       <div class="filter-group" id="filter-usecase">
         <span class="filter-label" data-i18n="filter-usecase">Use Case</span>
         <button class="chip active" data-uc="all" data-i18n="chip-all">All</button>
@@ -943,6 +950,13 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
       <div class="wz-dl-track hidden" id="set-rt-track"><div class="wz-dl-fill" id="set-rt-fill"></div></div>
     </div>
 
+    <div class="set-section hidden" id="set-mlx-section">
+      <div class="set-title" data-i18n="set-mlx-title">MLX runtime (Apple Silicon)</div>
+      <p class="set-desc" id="set-mlx-desc"></p>
+      <div class="set-row" id="set-mlx-actions"></div>
+      <div class="wz-dl-track hidden" id="set-mlx-track"><div class="wz-dl-fill" id="set-mlx-fill"></div></div>
+    </div>
+
     <div class="set-section">
       <div class="set-title" data-i18n="set-disk-title">Storage</div>
       <p class="set-desc" id="set-disk"></p>
@@ -1085,6 +1099,16 @@ const STRINGS = {
     'dl-started':'Downloading {name} ({quant})…',
     'dl-files':'file {i} of {n}',
     'remaining':'{t} left',
+    'filter-format':'Format','set-mlx-title':'MLX runtime (Apple Silicon)',
+    'mlx-desc-installed':'Installed: mlx-lm {v}. MLX models (marked MLX) run with Apple\'s MLX engine, often faster than GGUF on M-series Macs.',
+    'mlx-desc-missing':'Not installed yet. It is set up automatically (about 250 MB, one time) the first time you launch an MLX model.',
+    'mlx-latest':' Latest: {l}.','mlx-install':'Install MLX','mlx-update':'Update to {l}',
+    'mlx-confirm':'The MLX engine is not installed yet. Set it up now? (one-time, about 250 MB)',
+    'mlx-stage-downloading':'Setting up MLX… downloading installer','mlx-stage-python':'Setting up MLX… installing Python',
+    'mlx-stage-packages':'Setting up MLX… installing mlx-lm (this can take a minute)',
+    'mlx-badge-title':'Runs with Apple MLX (Apple Silicon only)',
+    'mlx-no-chat':'MLX models have no built-in chat page — connect an app (Open WebUI, VS Code…) with the details on the Deploy step.',
+    
     'btn-add-model':'Add model','btn-remove-custom':'Remove from list',
     'set-title':'Settings','set-hf-title':'HuggingFace token',
     'set-hf-desc':'Needed only for gated models (e.g. Llama, some Gemma repos): accept the model\'s license on HuggingFace, then paste a "Read" token from',
@@ -1202,6 +1226,16 @@ const STRINGS = {
     'dl-started':'正在下载 {name}（{quant}）…',
     'dl-files':'第 {i}/{n} 个文件',
     'remaining':'剩余 {t}',
+    'filter-format':'格式','set-mlx-title':'MLX 运行时（Apple Silicon）',
+    'mlx-desc-installed':'已安装：mlx-lm {v}。MLX 模型（标记为 MLX）使用 Apple 的 MLX 引擎运行，在 M 系列 Mac 上通常比 GGUF 更快。',
+    'mlx-desc-missing':'尚未安装。首次启动 MLX 模型时会自动安装（约 250 MB，仅需一次）。',
+    'mlx-latest':' 最新版本：{l}。','mlx-install':'安装 MLX','mlx-update':'更新到 {l}',
+    'mlx-confirm':'尚未安装 MLX 引擎。现在安装吗？（仅需一次，约 250 MB）',
+    'mlx-stage-downloading':'正在设置 MLX… 下载安装程序','mlx-stage-python':'正在设置 MLX… 安装 Python',
+    'mlx-stage-packages':'正在设置 MLX… 安装 mlx-lm（可能需要一分钟）',
+    'mlx-badge-title':'使用 Apple MLX 运行（仅限 Apple Silicon）',
+    'mlx-no-chat':'MLX 模型没有内置聊天页面 — 请使用部署步骤中的信息连接应用（Open WebUI、VS Code…）。',
+    
     'btn-add-model':'添加模型','btn-remove-custom':'从列表移除',
     'set-title':'设置','set-hf-title':'HuggingFace 令牌',
     'set-hf-desc':'仅受限模型需要（如 Llama、部分 Gemma 仓库）：先在 HuggingFace 上接受模型许可，然后粘贴一个 "Read" 令牌，获取地址',
@@ -1247,7 +1281,8 @@ const $ = id => document.getElementById(id);
 let currentMode='simple', currentTheme='dark', currentLang='en';
 let wizardPersona=null, wizardStep=0;
 let selectedId=null, sortCol='fit', sortDir='asc', detailPersona='general', detailRec=null;
-let filterSearch='', filterProvider='all', filterFit='all', filterUseCase='all';
+let filterSearch='', filterProvider='all', filterFit='all', filterUseCase='all', filterFormat='all';
+let mlxInfo = null;     // /api/runtime/mlx
 let filtered=[];
 
 // The download the user is currently watching (wizard or pro panel)
@@ -1314,6 +1349,8 @@ const API = {
   benchInfo:      ()           => req('/api/benchmarks/info'),
   addCustom:      (url)        => post('/api/models/custom', { url }),
   removeCustom:   (id)         => req('/api/models/custom/' + encodeURI(id), { method:'DELETE' }),
+  mlxRuntime:     ()           => req('/api/runtime/mlx'),
+  installMlx:     (upgrade)    => post('/api/runtime/mlx/install', { upgrade: !!upgrade }),
   launch:         (p)          => post('/api/launch', p),
   stop:           ()           => post('/api/stop'),
   launchStat:     ()           => req('/api/launch-status'),
@@ -1525,6 +1562,11 @@ document.addEventListener('DOMContentLoaded', () => {
     $('filter-fit').querySelectorAll('[data-fit]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active'); applyFilters();
   }));
+  $('filter-format').querySelectorAll('[data-format]').forEach(btn => btn.addEventListener('click', () => {
+    filterFormat=btn.dataset.format;
+    $('filter-format').querySelectorAll('[data-format]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); applyFilters();
+  }));
   $('filter-usecase').querySelectorAll('[data-uc]').forEach(btn => btn.addEventListener('click', () => {
     filterUseCase=btn.dataset.uc;
     $('filter-usecase').querySelectorAll('[data-uc]').forEach(b=>b.classList.remove('active'));
@@ -1681,8 +1723,9 @@ function renderRecs() {
   const usable = allModels.filter(m => m.fit==='Perfect' || m.fit==='Good');
   const pool = usable.length ? usable : allModels.filter(m=>m.fit==='Marginal');
   const order = (a,b) => (rank(b) + Math.min(b.tok_s,30)*0.4) - (rank(a) + Math.min(a.tok_s,30)*0.4);
-  let candidates = pool.filter(match).sort(order).slice(0,3);
-  if (candidates.length<2) candidates = [...candidates, ...pool.filter(m=>!candidates.includes(m)).sort(order)].slice(0,3);
+  const uniq = list => { const seen = new Set(); return list.filter(m => { const k = (m.base_model || m.name).toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }); };
+  let candidates = uniq(pool.filter(match).sort(order)).slice(0,3);
+  if (candidates.length<2) candidates = uniq([...candidates, ...pool.filter(m=>!candidates.includes(m)).sort(order)]).slice(0,3);
 
   if (!candidates.length) {
     $('rec-cards').innerHTML = `<div class="rec-card"><div class="rc-tagline">${esc(t('recs-none'))}</div></div>`;
@@ -1709,7 +1752,7 @@ function renderRecs() {
         <span class="rc-fit-badge ${fCls}"><span class="fit-dot ${fCls}"></span> ${esc(t(fitKey(m.fit)))}</span>
         ${isTop?`<span class="rc-rank">${esc(t('top-pick'))}</span>`:''}
       </div>
-      <div class="rc-name">${esc(m.name)}${inst?'<span class="inst-badge">✓</span>':''}</div>
+      <div class="rc-name">${esc(m.name)}${m.format==='mlx'?'<span class="fmt-badge">MLX</span>':''}${inst?'<span class="inst-badge">✓</span>':''}</div>
       <div class="rc-tagline">${esc(t(tagKey(m)))}</div>
       <div class="rc-meta">
         <span class="rc-meta-item">💾 <strong>${m.size_gb} GB</strong></span>
@@ -1845,7 +1888,7 @@ async function trackDownload() {
 /* ══════════════════════════════════════
    RUNTIME + LAUNCH
 ══════════════════════════════════════ */
-function renderRuntimeBox(r) {
+function renderRuntimeBox(r, mlx) {
   const box = $('runtime-box');
   if (!r || (r.installed && !r.installing && r.stage !== 'done')) { box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
@@ -1853,7 +1896,7 @@ function renderRuntimeBox(r) {
   if (r.installing) {
     track.classList.remove('hidden');
     $('runtime-fill').style.width = r.pct + '%';
-    setVal('runtime-text', r.stage === 'extracting' ? t('rt-extracting') : t('rt-installing', { pct: Math.floor(r.pct) }));
+    setVal('runtime-text', runtimeProgressText(r, mlx));
   } else if (r.stage === 'failed') {
     track.classList.add('hidden');
     setVal('runtime-text', t('rt-failed', { e: r.error }));
@@ -1862,8 +1905,35 @@ function renderRuntimeBox(r) {
     setVal('runtime-text', t('rt-done', { v: r.version || r.path }));
   } else {
     track.classList.add('hidden');
-    setVal('runtime-text', t('rt-missing'));
+    setVal('runtime-text', mlx ? t('mlx-desc-missing') : t('rt-missing'));
   }
+}
+
+function isMlxFile(filename) {
+  const inst = installed.find(x => x.filename === filename);
+  return !!inst && inst.format === 'mlx';
+}
+
+function runtimeProgressText(r, mlx) {
+  if (mlx) return t('mlx-stage-' + (r.stage || 'downloading'));
+  return r.stage === 'extracting' ? t('rt-extracting') : t('rt-installing', { pct: Math.floor(r.pct) });
+}
+
+/** Resolve once the MLX engine is available, installing it if needed. */
+async function ensureMlx(onProgress) {
+  let r = await API.mlxRuntime();
+  mlxInfo = r;
+  if (r.installed) return r;
+  if (!r.installing) r = await API.installMlx(false);
+  while (r.installing) {
+    onProgress && onProgress(r);
+    await sleep(1000);
+    r = await API.mlxRuntime();
+    mlxInfo = r;
+  }
+  onProgress && onProgress(r);
+  if (!r.installed) throw new Error(t('rt-failed', { e: r.error || '?' }));
+  return r;
 }
 
 /** Resolve once llama-server is available, installing it if needed. */
@@ -1895,7 +1965,8 @@ function launchParams(m, filename) {
 }
 
 async function startModel(m, filename, onProgress) {
-  await ensureRuntime(onProgress);
+  if (isMlxFile(filename)) await ensureMlx(r => onProgress && onProgress(r, true));
+  else await ensureRuntime(r => onProgress && onProgress(r, false));
   const res = await API.launch(launchParams(m, filename));
   if (!res.running) throw new Error(res.message || 'Unknown error');
   launchInfo = res;
@@ -1911,12 +1982,14 @@ function renderDoneStep() {
     $('cred-key-copy').dataset.copy = settingsInfo.api_key || '';
   }
   $('cred-model-copy').dataset.copy = PICK.filename.split('/').pop() || '';
-  renderRuntimeBox(runtimeInfo);
+  const pickMlx = isMlxFile(PICK.filename);
+  renderRuntimeBox(pickMlx ? mlxInfo : runtimeInfo, pickMlx);
   const st = $('launch-state');
   st.className = 'launch-state';
   if (launchInfo && launchInfo.running && launchInfo.model === PICK.filename) {
     st.classList.toggle('ok', !!launchInfo.ready);
     st.textContent = launchInfo.ready ? t('st-running', { name: PICK.modelName }) + ' · ' + t('st-port', { port: launchInfo.port })
+                                        + (launchInfo.backend === 'mlx' ? '\n' + t('mlx-no-chat') : '')
                                       : t('st-loading', { name: PICK.modelName });
   } else st.textContent = '';
   if (launchInfo && launchInfo.base_url) {
@@ -1932,7 +2005,8 @@ async function wizardLaunch() {
   const st = $('launch-state');
   st.className = 'launch-state'; st.textContent = '';
   try {
-    await startModel(m, PICK.filename, r => renderRuntimeBox(r));
+    if (isMlxFile(PICK.filename)) API.mlxRuntime().then(r => { mlxInfo = r; renderRuntimeBox(r, true); }).catch(()=>{});
+    await startModel(m, PICK.filename, (r, mlx) => renderRuntimeBox(r, mlx));
     renderDoneStep();
   } catch(e) {
     st.className = 'launch-state err';
@@ -1947,14 +2021,16 @@ async function proLaunch(id) {
   const inst = installedFor(id, m?.quant);
   if (!inst) { openQuantModal(id); return; }
   try {
-    const r = await API.runtime();
-    if (!r.installed && !r.installing && !confirm(t('rt-confirm'))) return;
+    const mlx = inst.format === 'mlx';
+    const r = mlx ? await API.mlxRuntime() : await API.runtime();
+    if (!r.installed && !r.installing && !confirm(t(mlx ? 'mlx-confirm' : 'rt-confirm'))) return;
     $('btn-launch').disabled = true;
     $('launch-bar').classList.remove('hidden');
-    await startModel(m, inst.filename, rt => {
-      $('lbar-model').textContent = rt.stage === 'extracting' ? t('rt-extracting') : t('rt-installing', { pct: Math.floor(rt.pct) });
+    await startModel(m, inst.filename, (rt, isMlx) => {
+      $('lbar-model').textContent = runtimeProgressText(rt, isMlx);
       $('lbar-pid').textContent = '';
     });
+    if (mlx) toast(t('mlx-no-chat'), '', 9000);
   } catch(e) {
     toast(t('err-launch', { e: e.message }) + cudaHint(), 'error', 15000);
     if (!(launchInfo && launchInfo.running)) $('launch-bar').classList.add('hidden');
@@ -1988,8 +2064,8 @@ function renderLaunchBar(st) {
   $('lbar-pid').textContent = (st.pid ? 'PID ' + st.pid + ' · ' : '') + t('st-port', { port: st.port });
   $('lbar-pid').title = st.cmd || '';
   const open = $('lbar-open');
-  open.href = st.chat_url;
-  open.classList.toggle('hidden', !st.ready);
+  open.href = st.chat_url || '#';
+  open.classList.toggle('hidden', !st.ready || !st.chat_url);
 }
 
 /* ══════════════════════════════════════
@@ -2060,6 +2136,7 @@ function applyFilters() {
     if(q&&!m.name.toLowerCase().includes(q)&&!m.provider.toLowerCase().includes(q)&&!m.id.toLowerCase().includes(q)) return false;
     if(filterProvider!=='all'&&m.provider!==filterProvider) return false;
     if(filterFit!=='all'&&m.fit!==filterFit) return false;
+    if(filterFormat!=='all'&&(m.format||'gguf')!==filterFormat) return false;
     if(filterUseCase!=='all'){
       const ok = {Coding:m.is_coding, Vision:m.is_vision, Reasoning:m.is_reasoning, Chat:m.use_case==='Chat'}[filterUseCase];
       if(!ok) return false;
@@ -2080,6 +2157,7 @@ function applyFilters() {
     return c || (FIT[a.fit]-FIT[b.fit]);
   });
   $('model-count').textContent = t('model-count')(filtered.length);
+  $('filter-format').classList.toggle('hidden', !allModels.some(m => m.format === 'mlx'));
   renderTable();
 }
 
@@ -2099,7 +2177,8 @@ function renderTable() {
     const tr=document.createElement('tr');
     if(m.id===selectedId) tr.classList.add('selected');
     const moe=m.is_moe?'<span class="moe-badge">MoE</span>':'';
-    const inst=(installedFor(m.id)?'<span class="inst-badge" title="Downloaded">✓</span>':'')
+    const inst=(m.format==='mlx'?`<span class="fmt-badge" title="${esc(t('mlx-badge-title'))}">MLX</span>`:'')
+      + (installedFor(m.id)?'<span class="inst-badge" title="Downloaded">✓</span>':'')
       + (m.gated?`<span class="lock-badge" title="${esc(t('gated-title'))}">🔒</span>`:'')
       + (m.custom?`<span class="cust-badge" title="${esc(t('custom-title'))}">+</span>`:'');
     const fCls=m.fit.replace(' ','-'), mCls=m.mode.replace('+','-').replace(' ','-');
@@ -2211,7 +2290,7 @@ async function openQuantModal(id) {
   $('modal-model-name').textContent = m.name;
   const sel = $('src-select');
   sel.innerHTML = m.sources.map(r => `<option value="${esc(r)}">${esc(t('src-option', { repo: r, pub: r.split('/')[0] }))}</option>`).join('');
-  sel.classList.toggle('hidden', m.sources.length < 2);
+  sel.classList.toggle('hidden', m.sources.length < 2 || m.format === 'mlx');
   $('quant-modal').classList.remove('hidden');
   await loadQuantList(id, m.sources[0]);
 }
@@ -2237,7 +2316,7 @@ async function loadQuantList(id, repo) {
   list.innerHTML = groups.map(g => {
     const tooBig = g.size_gb * 1.1 + 0.5 > pool;
     const noSpace = g.size_gb > freeGb;
-    const have = installed.some(x => x.model_id === repo && x.quant === g.quant && x.complete);
+    const have = installed.some(x => x.model_id === (g.repo || repo) && x.quant === g.quant && x.complete);
     const tags = [
       g.quant === recQuant ? `<span class="qi-tag rec">${esc(t('tag-rec'))}</span>` : '',
       have ? `<span class="qi-tag inst">${esc(t('tag-inst'))}</span>` : '',
@@ -2249,7 +2328,7 @@ async function loadQuantList(id, repo) {
       <div class="qi-left"><span class="qi-name">${esc(g.quant)}</span>
         <span class="qi-quality">quality ~${g.quality}%</span><div class="qi-tags">${tags}</div></div>
       <div class="qi-right"><span class="qi-size">${g.size_gb} GB</span>
-        <button class="qi-dl-btn" data-quant="${esc(g.quant)}" ${have||busy||noSpace?'disabled':''}>${esc(t('btn-download'))}</button></div>
+        <button class="qi-dl-btn" data-quant="${esc(g.quant)}" data-repo="${esc(g.repo || repo)}" ${have||busy||noSpace?'disabled':''}>${esc(t('btn-download'))}</button></div>
     </div>`;
   }).join('') || `<div class="modal-note">No GGUF files found.</div>`;
 
@@ -2259,7 +2338,7 @@ async function loadQuantList(id, repo) {
   list.querySelectorAll('.qi-dl-btn').forEach(btn => btn.addEventListener('click', async () => {
     btn.disabled = true;
     try {
-      await beginDownload(m, btn.dataset.quant, 'pro', repo);
+      await beginDownload(m, btn.dataset.quant, 'pro', btn.dataset.repo);
       $('quant-modal').classList.add('hidden');
       toast(t('dl-started', { name: m.name, quant: btn.dataset.quant }));
       if (selectedId === id) {
@@ -2292,8 +2371,9 @@ function renderRtChip() {
 async function openSettings() {
   $('settings-modal').classList.remove('hidden');
   try {
-    const [st, rt, bi] = await Promise.all([API.settings(), API.runtime(), API.benchInfo().catch(() => null)]);
-    settingsInfo = st; runtimeInfo = rt;
+    const [st, rt, bi, mx] = await Promise.all([API.settings(), API.runtime(), API.benchInfo().catch(() => null),
+                                                API.mlxRuntime().catch(() => null)]);
+    settingsInfo = st; runtimeInfo = rt; mlxInfo = mx;
     renderSettings(bi);
   } catch(e) { toast(e.message, 'error'); }
 }
@@ -2310,6 +2390,43 @@ function renderSettings(benchInfo) {
   setVal('set-disk', t('disk-desc', { path: d.path, models: d.models_gb, free: d.free_gb }));
   if (benchInfo) setVal('set-bench', t('bench-desc', { d: benchInfo.published || '—' }));
   renderSettingsRuntime();
+  renderSettingsMlx();
+}
+
+function renderSettingsMlx() {
+  const r = mlxInfo, sec = $('set-mlx-section');
+  sec.classList.toggle('hidden', !(r && r.supported));
+  if (!r || !r.supported) return;
+  let desc = r.installed ? t('mlx-desc-installed', { v: r.version }) : t('mlx-desc-missing');
+  if (r.latest_version && r.installed) desc += t('mlx-latest', { l: r.latest_version });
+  if (r.stage === 'failed' && r.error) desc += '\n' + t('rt-failed', { e: r.error });
+  setVal('set-mlx-desc', desc);
+  $('set-mlx-track').classList.toggle('hidden', !r.installing);
+  $('set-mlx-fill').style.width = (r.pct || 0) + '%';
+  const acts = $('set-mlx-actions');
+  acts.innerHTML = '';
+  if (r.installing) {
+    acts.innerHTML = `<span class="set-desc">${esc(runtimeProgressText(r, true))}</span>`;
+    return;
+  }
+  const btn = (label, upgrade) => {
+    const b = document.createElement('button');
+    b.className = 'btn-secondary'; b.textContent = label;
+    b.addEventListener('click', async () => {
+      try { mlxInfo = await API.installMlx(upgrade); renderSettingsMlx(); pollMlx(); } catch(e) { toast(e.message, 'error'); }
+    });
+    acts.appendChild(b);
+  };
+  if (!r.installed) btn(t('mlx-install'), false);
+  else if (r.update_available) btn(t('mlx-update', { l: r.latest_version }), true);
+}
+
+async function pollMlx() {
+  while (mlxInfo && mlxInfo.installing) {
+    await sleep(1000);
+    try { mlxInfo = await API.mlxRuntime(); } catch(e) { break; }
+    if (!$('settings-modal').classList.contains('hidden')) renderSettingsMlx();
+  }
 }
 
 function renderSettingsRuntime() {

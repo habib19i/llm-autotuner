@@ -10,11 +10,11 @@ Intel Macs and other systems: see **Run from source** in the README.
 
 ## What's new
 
-- **Mac and Linux downloads** alongside Windows.
-- **Faster on NVIDIA GPUs**: installs the CUDA build of llama.cpp when your driver supports it (Vulkan otherwise), and offers updates when a newer llama.cpp is released.
-- **Protected model server**: running models now require an API key, so other websites open in your browser can't use them. Find it in ⚙ Settings.
-- **Disk-space check** before every download.
-- **Bigger catalog**: models from Unsloth, bartowski, LM Studio Community and ggml-org (about 290), with a source picker when several publishers offer the same model.
-- **Add any model** by pasting a HuggingFace link.
-- **Gated models** (e.g. Llama) work after adding a HuggingFace token in Settings.
-- **Real quality data**: live LMArena ratings for models on the public leaderboard; other models get an estimate clearly marked with ~.
+- **MLX models on Apple Silicon Macs**: about 200 models from mlx-community (marked **MLX**), run with Apple's own MLX engine, which is often faster than GGUF on M-series chips. The app sets up the MLX engine by itself the first time you launch an MLX model (about 250 MB, one time); no Python or Homebrew needed.
+- MLX models use the same address and API key as GGUF models, so connected apps keep working.
+- **＋ Add model** also accepts links to MLX repositories.
+- Pro mode has a new **Format** filter (GGUF / MLX) on Macs.
+
+### Earlier in 2.2
+
+- Mac and Linux downloads; CUDA build for NVIDIA GPUs; API-key protected model server; disk-space checks; catalog from four publishers with a source picker; HuggingFace token for gated models; live LMArena quality data.

@@ -46,7 +46,7 @@ QUANT_QUALITY: Dict[str, float] = {
     "BF16": 100.0, "F16": 100.0, "F32": 100.0,
 }
 
-FULL_PRECISION = {"BF16", "F16", "F32"}
+FULL_PRECISION = {"BF16", "F16", "F32", "FP16"}
 
 _QUANT_RE = re.compile(
     r"[-._]((?:UD-)?(?:I?Q\d(?:_[A-Z0-9]+)*|BF16|F16|F32|MXFP4(?:_MOE)?))$", re.IGNORECASE)
@@ -133,6 +133,7 @@ class ModelEntry(BaseModel):
     sources: List[str] = []       # every GGUF repo of this base model, preferred first
     gated: bool = False           # needs a HuggingFace token + accepted license
     custom: bool = False          # added by the user from a HuggingFace link
+    format: str = "gguf"          # gguf (llama.cpp) | mlx (Apple MLX, one repo per quantization)
 
 
 # ─── Classification helpers ────────────────────────────────────────────────────
@@ -357,6 +358,144 @@ def merge_sources(models: List[ModelEntry]) -> List[ModelEntry]:
     return list(merged.values())
 
 
+# ─── MLX models (mlx-community) ────────────────────────────────────────────────
+# MLX publishes one repository per quantization (Qwen3-8B-4bit, Qwen3-8B-8bit, …), each a
+# folder of .safetensors + config/tokenizer files. They are grouped into one entry per base
+# model; each QuantOption.filename holds the repo id of that variant.
+
+_MLX_SUFFIX = re.compile(
+    r"[-_]((?:\d+(?:\.\d+)?bit)(?:[-_][A-Za-z0-9.]+)*|bf16|fp16|fp8|mxfp4(?:[-_][\w]+)*|mxfp8(?:[-_][\w]+)*|"
+    r"nvfp4(?:[-_][\w]+)*|mixed[-_][\d_]+[-\w]*|dwq[-\w]*)$", re.I)
+
+
+def mlx_quant_label(repo_name: str, config: Optional[Dict] = None) -> Tuple[str, str]:
+    """('Qwen3-8B-4bit-DWQ') -> ('Qwen3-8B', '4bit-DWQ'); falls back to the config's bit width."""
+    m = _MLX_SUFFIX.search(repo_name)
+    if m:
+        return repo_name[:m.start()], m.group(1)
+    bits = ((config or {}).get("quantization_config") or (config or {}).get("quantization") or {}).get("bits")
+    stem = re.sub(r"[-_]mlx$", "", repo_name, flags=re.I)
+    return stem, (f"{bits}bit" if bits else "bf16")
+
+
+def mlx_bits(label: str) -> float:
+    low = label.lower()
+    if low.startswith(("bf16", "fp16")):
+        return 16.0
+    if low.startswith(("fp8", "mxfp8")):
+        return 8.25
+    if low.startswith(("mxfp4", "nvfp4")):
+        return 4.25
+    m = re.match(r"(?:mixed[-_])?(\d+(?:\.\d+)?)", low)
+    bits = float(m.group(1)) if m else 4.0
+    return bits + 0.5  # per-group scales and biases (group size 64)
+
+
+def mlx_quality(label: str) -> float:
+    b = mlx_bits(label) - 0.5
+    q = 100.0 if b >= 15 else 99.5 if b >= 7.9 else 98.0 if b >= 5.9 else 96.5 if b >= 4.9 else \
+        94.0 if b >= 3.9 else 88.0 if b >= 2.9 else 78.0
+    if re.search(r"dwq|awq", label, re.I):
+        q += 1.5  # distilled / activation-aware quants recover part of the loss
+    return min(100.0, q)
+
+
+def _mlx_files_ok(files: List[str]) -> bool:
+    low = [f.lower() for f in files]
+    return any(f.endswith(".safetensors") for f in low) and "config.json" in low and \
+        not any(f.endswith(".gguf") for f in low)
+
+
+def _fetch_mlx(c: httpx.Client, context_by_base: Dict[str, int]) -> List[ModelEntry]:
+    params = [("author", "mlx-community"), ("limit", "300"), ("sort", "downloads"),
+              ("pipeline_tag", "text-generation")]
+    params += [("expand[]", x) for x in ("siblings", "downloads", "likes", "lastModified", "tags",
+                                         "safetensors", "config", "gated")]
+    r = c.get(f"{HF_API}/models", params=params)
+    r.raise_for_status()
+    return mlx_entries(r.json(), context_by_base)
+
+
+def mlx_entries(items: List[Dict], context_by_base: Dict[str, int]) -> List[ModelEntry]:
+    groups: Dict[str, Dict[str, Any]] = {}
+    for item in items:
+        rid = item.get("id", "")
+        name = rid.split("/")[-1]
+        if not REPO_ID_RE.match(rid) or _NON_CHAT_NAME.search(name):
+            continue
+        files = [s.get("rfilename", "") for s in item.get("siblings") or []]
+        if not _mlx_files_ok(files):
+            continue
+        total = (item.get("safetensors") or {}).get("total")
+        stem, label = mlx_quant_label(name, item.get("config"))
+        params_b = total / 1e9 if total else _params_from_name(stem)
+        if not params_b:
+            continue
+        base = _base_model_of(item)
+        key = (base or stem).lower()
+        g = groups.setdefault(key, {"stem": stem, "base": base, "variants": [], "downloads": 0,
+                                    "likes": 0, "updated": "", "gated": False})
+        g["variants"].append((label, rid, params_b))
+        g["downloads"] += item.get("downloads") or 0
+        g["likes"] = max(g["likes"], item.get("likes") or 0)
+        g["updated"] = max(g["updated"], (item.get("lastModified") or "")[:10])
+        g["gated"] = g["gated"] or bool(item.get("gated"))
+
+    out: List[ModelEntry] = []
+    for g in groups.values():
+        seen = set()
+        quants = []
+        for label, rid, params_b in g["variants"]:
+            if label.lower() in seen:
+                continue
+            seen.add(label.lower())
+            quants.append(QuantOption(quant=label, filename=rid,
+                                      size_gb=round(params_b * 1e9 * mlx_bits(label) / 8 / 1024 ** 3 + 0.05, 2),
+                                      quality=mlx_quality(label)))
+        quants.sort(key=lambda q: q.size_gb)
+        # Prefer a plain 4-bit repo as the entry's id (most common, good default)
+        primary = next((q for q in quants if q.quant.lower() == "4bit"), quants[0])
+        params_b = next(p for l, r, p in g["variants"] if r == primary.filename)
+        stem = g["stem"]
+        active, is_moe = _active_params(stem, params_b)
+        ctx_k = context_by_base.get(g["base"].lower(), 32) if g["base"] else 32
+        m = dict(
+            id=primary.filename, name=stem.replace("-", " ").replace("_", " "),
+            provider=_derive_provider(g["base"] or stem), family="mlx",
+            params_b=round(params_b, 2), active_params_b=round(active, 2), context_k=ctx_k,
+            is_vision=False, is_coding=bool(_CODING_RE.search(stem)),
+            is_reasoning=bool(_REASON_RE.search(stem)), is_moe=is_moe, quants=quants,
+            downloads=g["downloads"], likes=g["likes"], updated=g["updated"],
+            hf_url=f"https://huggingface.co/{primary.filename}", base_model=g["base"],
+            publisher="mlx-community", sources=[q.filename for q in quants], gated=g["gated"],
+            format="mlx",
+        )
+        m["use_case"] = _derive_use_case(m)
+        out.append(ModelEntry(**m))
+    return out
+
+
+def mlx_variants(entry: ModelEntry) -> List[Dict[str, Any]]:
+    """Download options of an MLX entry: one per variant repo, with exact sizes."""
+    out = []
+    for q in entry.quants:
+        files = [f for f in repo_tree(q.filename) if mlx_wanted_file(f["path"])]
+        size = sum(f["size"] for f in files)
+        out.append({"quant": q.quant, "files": files, "size_bytes": size,
+                    "size_gb": round(size / 1024 ** 3, 2), "quality": q.quality, "shards": 1,
+                    "repo": q.filename})
+    out.sort(key=lambda g: g["size_bytes"])
+    return out
+
+
+def mlx_wanted_file(path: str) -> bool:
+    low = path.lower()
+    name = low.split("/")[-1]
+    if name in (".gitattributes",) or name.startswith("readme") or low.startswith(("original/", ".")):
+        return False
+    return not name.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf", ".md"))
+
+
 # ─── Offline fallback dataset ──────────────────────────────────────────────────
 
 _STD = ["Q2_K", "Q3_K_M", "Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0"]
@@ -437,7 +576,15 @@ def _fetch_hf() -> List[ModelEntry]:
                     per_source.append([])
     if not any(per_source):
         raise RuntimeError("no catalog data")
-    return merge_sources([m for group in per_source for m in group])
+    gguf = merge_sources([m for group in per_source for m in group])
+    context_by_base = {m.base_model.lower(): m.context_k for m in gguf if m.base_model}
+    try:
+        with httpx.Client(timeout=HF_TIMEOUT, follow_redirects=True, headers=hf_headers()) as c:
+            mlx = _fetch_mlx(c, context_by_base)
+    except Exception as e:
+        logger.warning(f"MLX catalog fetch failed: {e}")
+        mlx = []
+    return gguf + mlx
 
 
 # ─── User-added models (paste a HuggingFace link) ──────────────────────────────
@@ -469,7 +616,7 @@ def parse_repo_id(text: str) -> str:
 def add_custom_model(text: str) -> ModelEntry:
     global _mem_cache
     rid = parse_repo_id(text)
-    params = [("expand[]", x) for x in _EXPAND]
+    params = [("expand[]", x) for x in _EXPAND + ("safetensors", "config")]
     with httpx.Client(timeout=HF_TIMEOUT, follow_redirects=True, headers=hf_headers()) as c:
         r = c.get(f"{HF_API}/models/{rid}", params=params)
     if r.status_code in (401, 403):
@@ -480,8 +627,12 @@ def add_custom_model(text: str) -> ModelEntry:
     item = r.json()
     item["id"] = item.get("id") or rid
     e = _from_hf_item(item, require_meta=False)
+    if e is None and _mlx_files_ok([s.get("rfilename", "") for s in item.get("siblings") or []]):
+        found = mlx_entries([item], {})
+        e = found[0] if found else None
     if e is None:
-        raise LookupError("No GGUF model files found in this repository (llama.cpp needs .gguf files)")
+        raise LookupError("No model files found: the repository needs .gguf files (llama.cpp) or "
+                          "MLX weights (.safetensors + config.json)")
     e.custom = True
     with _lock:
         _write_custom([x for x in _read_custom() if x.id != e.id] + [e])

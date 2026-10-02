@@ -8,6 +8,7 @@ from .hardware import HardwareProfile, profile_hardware
 from .model_repository import ModelEntry, QuantOption, get_models, FULL_PRECISION
 from .benchmark_provider import Benchmarks, catalog_benchmarks, rating_to_score
 from .scoring import MemResult, estimate_memory, persona_score
+from .mlx_runtime import mlx_supported
 
 
 class ModelRow(BaseModel):
@@ -41,6 +42,7 @@ class ModelRow(BaseModel):
     sources: List[str]
     gated: bool
     custom: bool
+    format: str                # gguf | mlx
     # Quality data (published numbers are None when not published for this model)
     swe_bench: Optional[float]
     humaneval: Optional[float]
@@ -133,7 +135,7 @@ def _row(m: ModelEntry, q: QuantOption, mem: MemResult, bench: Benchmarks) -> Mo
         is_vision=m.is_vision, is_coding=m.is_coding, is_reasoning=m.is_reasoning, is_moe=m.is_moe,
         size_gb=q.size_gb, hf_url=m.hf_url,
         publisher=m.publisher, base_model=m.base_model, sources=list(m.sources),
-        gated=m.gated, custom=m.custom,
+        gated=m.gated, custom=m.custom, format=m.format,
         swe_bench=bench.swe_bench, humaneval=bench.humaneval, gpqa=bench.gpqa,
         ifeval=bench.ifeval, mmlu=bench.mmlu, rating=int(round(bench.rating)),
         arena_elo=bench.arena_elo, arena_coding=bench.arena_coding, arena_vision=bench.arena_vision,
@@ -152,6 +154,9 @@ def build_table(hw: Optional[HardwareProfile] = None) -> List[ModelRow]:
         hw = profile_hardware()
     rows: List[ModelRow] = []
     models = get_models()
+    # MLX needs Apple Silicon: show those models on Macs, or when the user plans for an Apple machine
+    if not (mlx_supported() or hw.gpu.vendor == "Apple"):
+        models = [m for m in models if m.format != "mlx"]
     benches = _benches(models)
     for m in models:
         q, mem = pick_quant(m, hw)

@@ -11,7 +11,9 @@ from pydantic import BaseModel, Field
 from .hardware import HardwareProfile, profile_hardware
 import httpx
 
-from .model_repository import get_models, quant_files, REPO_ID_RE, add_custom_model, remove_custom_model
+from .model_repository import (get_models, quant_files, REPO_ID_RE, add_custom_model, remove_custom_model,
+                               find_model, mlx_variants)
+from . import mlx_runtime
 from .selector import build_table, get_recommendation
 from .downloader import (resolve_download, start_download, all_jobs, installed_models, cancel_job,
                          delete_model, disk_info, DiskSpaceError)
@@ -155,6 +157,9 @@ def api_hf_files(model_id: str):
     if not REPO_ID_RE.match(model_id):
         raise HTTPException(400, "Invalid model id")
     try:
+        entry = find_model(model_id)
+        if entry is not None and entry.format == "mlx":
+            return mlx_variants(entry)   # MLX: one repository per quantization
         return quant_files(model_id)
     except PermissionError as e:
         raise HTTPException(403, str(e))
@@ -239,6 +244,23 @@ async def api_runtime_install(req: Optional[RuntimeInstallReq] = None):
     return runtime.start_install(g.vendor, g.integrated, g.driver_version, req.variant if req else None)
 
 
+@app.get("/api/runtime/mlx")
+def api_runtime_mlx():
+    return mlx_runtime.status()
+
+
+class MlxInstallReq(BaseModel):
+    upgrade: bool = False
+
+
+@app.post("/api/runtime/mlx/install")
+async def api_runtime_mlx_install(req: Optional[MlxInstallReq] = None):
+    st = launch_status()
+    if st.running and st.backend == "mlx":
+        await asyncio.to_thread(stop)
+    return mlx_runtime.start_install(upgrade=bool(req and req.upgrade))
+
+
 # ─── Settings ──────────────────────────────────────────────────────────────────
 
 def _settings():
@@ -251,6 +273,7 @@ def _settings():
         "api_key": key,
         "api_key_enabled": bool(key),
         "llm_base_url": f"http://127.0.0.1:{LLM_PORT}/v1",
+        "mlx_supported": mlx_runtime.mlx_supported(),
         "disk": disk_info(),
     }
 

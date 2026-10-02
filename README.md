@@ -1,7 +1,8 @@
 # LLM Autotuner
 
 Hardware-aware local LLM deployment. It scans your computer, ranks ~290 current GGUF models
-from HuggingFace by how well they fit **your** memory, downloads the right quantization,
+(plus ~200 MLX models on Apple Silicon Macs) from HuggingFace by how well they fit **your**
+memory, downloads the right quantization,
 installs the llama.cpp runtime, and starts an OpenAI-compatible API server — all from a
 local web UI. Windows, macOS and Linux.
 
@@ -57,7 +58,23 @@ Closing the app's window stops the app and the model server.
 
 - The catalog combines **Unsloth, bartowski, LM Studio Community and ggml-org**. When several
   publish the same model, the download dialog lets you pick the source.
-- **＋ Add model** (Pro mode) accepts any HuggingFace link to a repository with `.gguf` files.
+- **＋ Add model** (Pro mode) accepts any HuggingFace link to a repository with `.gguf` files
+  or MLX weights.
+
+### MLX models (Apple Silicon Macs)
+
+On a Mac with an M-series chip the catalog also lists ~200 **MLX** models from
+[mlx-community](https://huggingface.co/mlx-community) (marked **MLX**; use the *Format* filter in
+Pro mode). MLX is Apple's own machine-learning engine and is often faster than GGUF on Apple
+Silicon.
+
+- The first time you launch an MLX model the app sets up the MLX engine by itself (about
+  250 MB, one time) in its own `bin/` folder — no Python or Homebrew needed. Update it from
+  ⚙ Settings.
+- MLX models are served on the same address (`http://127.0.0.1:8080/v1`) with the same API
+  key, so apps connected to the GGUF version keep working.
+- MLX models have no built-in chat page; connect an app such as Open WebUI, or VS Code.
+- Already have `mlx-lm` installed? Set `AUTOTUNER_MLX_PYTHON` to that Python to use it.
 
 ### Data folders (created next to the app)
 
@@ -66,7 +83,7 @@ Closing the app's window stops the app and the model server.
 | `models/` | Downloaded models, one folder per repo (multi-part models and vision projectors are kept together) |
 | `bin/`    | The llama.cpp runtime |
 | `cache/`  | Model catalog, quality ratings and settings |
-| `logs/`   | `llama-server.log` — check this if a model fails to start |
+| `logs/`   | `model-server.log` — check this if a model fails to start |
 
 ### Options
 
@@ -81,6 +98,8 @@ AI_Model_Autotuner [--port 8001] [--no-browser]
 | `AUTOTUNER_HOME`      | app folder | Where `models/`, `bin/`, `cache/`, `logs/` live |
 | `AUTOTUNER_API_KEY`   | generated | Fixed API key for the model server (empty string disables it) |
 | `HF_TOKEN`            | —       | HuggingFace token (alternative to Settings) |
+| `AUTOTUNER_MLX_PYTHON`| —       | Python with `mlx-lm` to use instead of the app-managed MLX engine |
+| `AUTOTUNER_ENABLE_MLX`| —       | `1` shows MLX models on non-Apple machines (development only) |
 
 If you already have `llama-server` on your `PATH` or in `bin/`, it is used instead of
 downloading one.
@@ -137,7 +156,10 @@ backend/
   selector.py              table rows + per-workflow recommendations
   downloader.py            resumable multi-file downloads, disk checks, installed models
   runtime.py               llama.cpp build selection (CUDA/Vulkan/Metal/CPU), install, updates
-  launcher.py              llama-server process management, API key, health check
+  launcher.py              model server process management (llama.cpp or MLX), API key, health
+  mlx_runtime.py           MLX engine setup on Apple Silicon (uv + private Python + mlx-lm)
+  mlx_proxy.py             API-key gateway in front of mlx_lm.server
+scripts/mlx_smoke.py       real MLX end-to-end check (runs in CI on an Apple Silicon Mac)
 frontend/index.html        single-file UI (EN / 中文, dark / light)
 packaging/                 release notes, macOS launcher, signing entitlements
 .github/workflows/         CI tests + release builds for Windows, macOS, Linux

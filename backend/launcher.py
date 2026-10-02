@@ -1,4 +1,5 @@
 import atexit
+import os
 import subprocess
 import sys
 import threading
@@ -8,16 +9,19 @@ from typing import Dict, List, Optional
 import httpx
 from pydantic import BaseModel
 from .runtime import find_server
+from . import mlx_runtime
+from .mlx_proxy import Gateway
 from .utils import LOG_DIR, LLM_PORT, MODELS_DIR, NO_WINDOW, get_logger, safe_model_path, llm_api_key
 
 logger = get_logger("launcher")
 
-LOG_FILE = LOG_DIR / "llama-server.log"
+LOG_FILE = LOG_DIR / "model-server.log"
 
 _lock = threading.Lock()
 _proc: Optional[subprocess.Popen] = None
 _log_fh = None
 _info: Dict = {}
+_gateway: Optional[Gateway] = None
 
 
 # ─── Tie llama-server's lifetime to ours ───────────────────────────────────────
@@ -92,6 +96,7 @@ class LaunchStatus(BaseModel):
     chat_url: str = f"http://127.0.0.1:{LLM_PORT}"
     dry_run: bool = False
     api_key_required: bool = False
+    backend: str = "llama.cpp"   # llama.cpp | mlx
 
 
 def _tail_log(n: int = 25) -> str:
@@ -103,9 +108,15 @@ def _tail_log(n: int = 25) -> str:
 
 
 def stop() -> bool:
-    global _proc, _info, _log_fh
+    global _proc, _info, _log_fh, _gateway
     with _lock:
         stopped = False
+        if _gateway is not None:
+            try:
+                _gateway.stop()
+            except Exception:
+                pass
+            _gateway = None
         if _proc and _proc.poll() is None:
             try:
                 _proc.terminate()
@@ -145,6 +156,8 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
         model_path = safe_model_path(filename)
     except ValueError as e:
         return LaunchStatus(running=False, message=str(e))
+    if model_path.is_dir() and (model_path / "config.json").exists():
+        return _launch_mlx(filename, model_path)
     if not model_path.exists() or model_path.suffix.lower() != ".gguf":
         return LaunchStatus(running=False, message=f"'{filename}' is not downloaded yet — download it first.")
 
@@ -180,13 +193,19 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
             f"Port {LLM_PORT} is already in use by another program. Stop it, or set "
             f"AUTOTUNER_LLM_PORT to a free port and restart the app."))
 
-    cmd_vec = [exe] + args
+    return _spawn([exe] + args, Path(exe).parent, filename, model_path.name, key, "llama.cpp")
+
+
+def _spawn(cmd_vec: List[str], cwd: Path, filename: str, display: str, key: str, backend: str,
+           env: Optional[Dict[str, str]] = None, extra: Optional[Dict] = None,
+           after_start=None) -> LaunchStatus:
+    global _proc, _info, _log_fh
     try:
         shown_cmd = " ".join("***" if key and a == key else a for a in cmd_vec)
         with _lock:
             _log_fh = open(LOG_FILE, "w", encoding="utf-8", errors="replace")
             proc = subprocess.Popen(cmd_vec, stdout=_log_fh, stderr=subprocess.STDOUT,
-                                    stdin=subprocess.DEVNULL, cwd=str(Path(exe).parent),
+                                    stdin=subprocess.DEVNULL, cwd=str(cwd), env=env,
                                     creationflags=NO_WINDOW,
                                     preexec_fn=None if sys.platform == "win32" else _child_preexec)
             _bind_to_parent(proc)
@@ -197,29 +216,87 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
                 "pid": proc.pid,
                 "model": filename,
                 "cmd": shown_cmd,
-                "message": f"Loading {model_path.name} (PID {proc.pid})…",
+                "message": f"Loading {display} (PID {proc.pid})…",
                 "api_key_required": bool(key),
+                "backend": backend,
+                **(extra or {}),
             }
             info = dict(_info)
+        if after_start:
+            err = after_start()
+            if err:
+                stop()
+                return LaunchStatus(running=False, message=err, backend=backend)
         # Give it a moment to fail fast (bad model file, missing GPU driver, …)
         try:
             proc.wait(timeout=2.0)
             err = _tail_log()
             stop()
-            return LaunchStatus(running=False, message=f"llama-server exited immediately:\n{err}")
+            return LaunchStatus(running=False, message=f"{backend} server exited immediately:\n{err}",
+                                backend=backend)
         except subprocess.TimeoutExpired:
             pass
 
-        logger.info(f"Launched {model_path.name} (PID {proc.pid})")
-        return LaunchStatus(**info)
+        logger.info(f"Launched {display} with {backend} (PID {proc.pid})")
+        return LaunchStatus(**{k: v for k, v in info.items() if k in LaunchStatus.model_fields})
     except Exception as e:
         logger.error(f"Launch failed: {e}")
         stop()
-        return LaunchStatus(running=False, message=str(e))
+        return LaunchStatus(running=False, message=str(e), backend=backend)
 
 
-def _health() -> bool:
+def _free_port() -> int:
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _launch_mlx(filename: str, model_dir: Path) -> LaunchStatus:
+    """Start mlx_lm.server on a private port behind the authenticating gateway on LLM_PORT."""
+    global _gateway, _info
+    key = llm_api_key()
+    py = mlx_runtime.env_python()
+    internal = _free_port()
+    args = [str(py), "-m", "mlx_lm.server", "--model", str(model_dir), "--host", "127.0.0.1",
+            "--port", str(internal), "--max-tokens", "4096",
+            # Browsers may not talk to the private port directly; everything goes through the gateway
+            "--allowed-origins", "http://127.0.0.1:1"]
+    if not mlx_runtime.is_installed():
+        with _lock:
+            _info = {"running": False, "pid": None, "model": filename, "dry_run": True, "backend": "mlx",
+                     "cmd": "mlx_lm.server " + " ".join(args[3:]),
+                     "message": "The MLX runtime is not installed. Install it from the app (Settings)."}
+        return LaunchStatus(**_info)
+    if _port_in_use(LLM_PORT):
+        return LaunchStatus(running=False, backend="mlx", message=(
+            f"Port {LLM_PORT} is already in use by another program. Stop it, or set "
+            f"AUTOTUNER_LLM_PORT to a free port and restart the app."))
+
+    env = {**os.environ,
+           "HF_HUB_OFFLINE": "1",            # never download a model just because a client named it
+           "TRANSFORMERS_OFFLINE": "1",
+           "HF_HOME": str(mlx_runtime.MLX_DIR / "hf-home"),
+           "PYTHONUNBUFFERED": "1"}
+
+    def start_gateway():
+        global _gateway
+        gw = Gateway(LLM_PORT, f"http://127.0.0.1:{internal}", key)
+        if not gw.start():
+            return f"Could not open port {LLM_PORT} for the model API."
+        with _lock:
+            _gateway = gw
+        return None
+
+    return _spawn(args, model_dir, filename, model_dir.name, key, "mlx", env=env,
+                  extra={"internal_port": internal, "chat_url": ""}, after_start=start_gateway)
+
+
+def _health(info: Optional[Dict] = None) -> bool:
     try:
+        if info and info.get("internal_port"):
+            r = httpx.get(f"http://127.0.0.1:{info['internal_port']}/health", timeout=1.0)
+            return r.status_code == 200
         key = llm_api_key()
         r = httpx.get(f"http://127.0.0.1:{LLM_PORT}/health", timeout=1.0,
                       headers={"Authorization": f"Bearer {key}"} if key else {})
@@ -236,12 +313,14 @@ def status() -> LaunchStatus:
         if proc.poll() is not None:
             tail = _tail_log(8)
             stop()
-            return LaunchStatus(running=False, message=f"llama-server stopped (exit code {proc.returncode}).\n{tail}".strip())
-        ready = _health()
+            name = "mlx_lm.server" if info.get("backend") == "mlx" else "llama-server"
+            return LaunchStatus(running=False, message=f"{name} stopped (exit code {proc.returncode}).\n{tail}".strip())
+        ready = _health(info)
         msg = f"Serving {Path(info.get('model', '')).name} on port {LLM_PORT}" if ready else info.get("message", "")
-        return LaunchStatus(**{"running": True, **info, "ready": ready, "message": msg})
+        fields = {k: v for k, v in info.items() if k in LaunchStatus.model_fields}
+        return LaunchStatus(**{"running": True, **fields, "ready": ready, "message": msg})
     if info.get("dry_run"):
-        return LaunchStatus(**info)
+        return LaunchStatus(**{k: v for k, v in info.items() if k in LaunchStatus.model_fields})
     return LaunchStatus(running=False, message="No model running.")
 
 
