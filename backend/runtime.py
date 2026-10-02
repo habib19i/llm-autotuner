@@ -142,6 +142,11 @@ def _fetch_releases() -> List[Dict]:
     with httpx.Client(timeout=20, follow_redirects=True,
                       headers={"Accept": "application/vnd.github+json"}) as c:
         r = c.get(RELEASES_API, params={"per_page": 8})
+        if r.status_code in (403, 429) and r.headers.get("x-ratelimit-remaining") == "0":
+            reset = int(r.headers.get("x-ratelimit-reset") or 0)
+            mins = max(1, int((reset - time.time()) / 60)) if reset else 60
+            raise ConnectionError(f"GitHub's download limit for this network was reached; "
+                                  f"try again in about {mins} minutes.")
         r.raise_for_status()
         return r.json()
 

@@ -27,7 +27,6 @@ MLX_DIR = BIN_DIR / "mlx"
 ENV_DIR = MLX_DIR / "env"
 UV_DIR = MLX_DIR / "uv"
 VERSION_FILE = MLX_DIR / "VERSION"
-UV_RELEASES = "https://api.github.com/repos/astral-sh/uv/releases/latest"
 PYPI_MLX_LM = "https://pypi.org/pypi/mlx-lm/json"
 PYTHON_VERSION = "3.12"
 
@@ -149,12 +148,9 @@ async def _ensure_uv():
     asset = _uv_asset()
     if not asset:
         raise LookupError(f"No uv build for {platform.system()} {platform.machine()}")
-    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=120.0), follow_redirects=True,
-                                 headers={"Accept": "application/vnd.github+json"}) as c:
-        rel = (await c.get(UV_RELEASES)).json()
-        url = next((a["browser_download_url"] for a in rel.get("assets", []) if a["name"] == asset), None)
-        if not url:
-            raise LookupError(f"uv release asset {asset} not found")
+    # Fixed "latest release" download link: no GitHub API call, so no API rate limit
+    url = f"https://github.com/astral-sh/uv/releases/latest/download/{asset}"
+    async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=120.0), follow_redirects=True) as c:
         archive = MLX_DIR / asset
         async with c.stream("GET", url) as resp:
             resp.raise_for_status()
