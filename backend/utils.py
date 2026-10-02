@@ -61,7 +61,9 @@ def format_bytes(n: int) -> str:
 
 def safe_model_path(rel: str) -> Path:
     """Resolve a user-supplied path relative to MODELS_DIR, refusing anything outside it."""
-    if not rel or "\x00" in rel:
+    # Identifiers always use forward slashes; backslashes and drive letters are rejected on
+    # every OS so a path means the same thing everywhere.
+    if not rel or "\x00" in rel or "\\" in rel or ":" in rel:
         raise ValueError("Invalid model path")
     base = MODELS_DIR.resolve()
     p = (base / rel).resolve()
