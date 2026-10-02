@@ -17,7 +17,10 @@ MODEL = "mlx-community/SmolLM2-135M-Instruct-8bit"
 def wait(what, fn, timeout):
     t0 = time.time()
     while time.time() - t0 < timeout:
-        v = fn()
+        try:
+            v = fn()
+        except httpx.TransportError:  # app or server still starting
+            v = None
         if v:
             print(f"✓ {what} ({time.time() - t0:.0f}s)")
             return v
