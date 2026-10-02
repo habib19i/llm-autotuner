@@ -40,9 +40,16 @@ def build():
         "--clean",
         "--noconfirm",
         "--add-data", f"frontend{os.pathsep}frontend",
+        "--add-data", f"{os.path.join('backend', 'data')}{os.pathsep}{os.path.join('backend', 'data')}",
         "--collect-submodules", "backend",
         "main.py"
     ]
+
+    # macOS: sign with a Developer ID when one is configured (see .github/workflows/release.yml)
+    identity = os.environ.get("MACOS_CODESIGN_IDENTITY")
+    if sys.platform == "darwin" and identity:
+        cmd.extend(["--codesign-identity", identity, "--osx-entitlements-file",
+                    os.path.join("packaging", "entitlements.plist")])
 
     # Uvicorn picks its protocol/loop implementations dynamically, so PyInstaller misses them
     cmd.extend([
@@ -66,7 +73,8 @@ def build():
     ])
 
     subprocess.check_call(cmd)
-    print("Build complete! Check the 'dist' folder for AI_Model_Autotuner.exe")
+    exe = "AI_Model_Autotuner.exe" if os.name == "nt" else "AI_Model_Autotuner"
+    print(f"Build complete! Check the 'dist' folder for {exe}")
 
 
 if __name__ == "__main__":

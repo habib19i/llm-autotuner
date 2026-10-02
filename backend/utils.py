@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 APP_NAME = "llm-autotuner"
-APP_VERSION = "2.1.0"
+APP_VERSION = "2.2.0"
 
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     # Running in a PyInstaller bundle
@@ -73,3 +73,66 @@ def safe_model_path(rel: str) -> Path:
 def rel_model_path(p: Path) -> str:
     """Path relative to MODELS_DIR, always with forward slashes (stable API identifier)."""
     return p.resolve().relative_to(MODELS_DIR.resolve()).as_posix()
+
+
+# ─── Persistent settings (cache/settings.json) ─────────────────────────────────
+
+import json as _json
+import secrets as _secrets
+import threading as _threading
+
+SETTINGS_FILE = CACHE_DIR / "settings.json"
+_settings_lock = _threading.Lock()
+
+
+def _read_settings() -> dict:
+    try:
+        return _json.loads(SETTINGS_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def get_setting(key: str, default=None):
+    return _read_settings().get(key, default)
+
+
+def set_setting(key: str, value) -> None:
+    with _settings_lock:
+        s = _read_settings()
+        if value is None:
+            s.pop(key, None)
+        else:
+            s[key] = value
+        SETTINGS_FILE.write_text(_json.dumps(s, indent=1), encoding="utf-8")
+        try:
+            os.chmod(SETTINGS_FILE, 0o600)  # holds the HF token; keep it private on POSIX
+        except OSError:
+            pass
+
+
+def hf_token() -> str:
+    """HuggingFace access token: HF_TOKEN env var wins over the saved setting."""
+    return os.environ.get("HF_TOKEN") or get_setting("hf_token") or ""
+
+
+def hf_headers() -> dict:
+    tok = hf_token()
+    return {"Authorization": f"Bearer {tok}"} if tok else {}
+
+
+def llm_api_key() -> str:
+    """Key required by the local model server. Stable across restarts so client configs keep
+    working. AUTOTUNER_API_KEY overrides it; setting it to an empty string disables auth."""
+    env = os.environ.get("AUTOTUNER_API_KEY")
+    if env is not None:
+        return env
+    key = get_setting("llm_api_key")
+    if not key:
+        key = "sk-local-" + _secrets.token_urlsafe(18)
+        set_setting("llm_api_key", key)
+    return key
+
+
+def regenerate_api_key() -> str:
+    set_setting("llm_api_key", "sk-local-" + _secrets.token_urlsafe(18))
+    return llm_api_key()

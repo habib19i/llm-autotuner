@@ -9,8 +9,10 @@ Resilient downloader:
 - Tmp file is kept across retries (and app restarts) so progress is never lost
 """
 import asyncio
+import errno
 import json
 import re
+import shutil
 import threading
 import time
 from pathlib import Path
@@ -18,7 +20,7 @@ from typing import Dict, List, Any, Optional, Set
 import httpx
 from pydantic import BaseModel
 from .model_repository import REPO_ID_RE, quant_files, mmproj_file, find_model, quant_from_filename
-from .utils import MODELS_DIR, get_logger, format_bytes, safe_model_path, rel_model_path
+from .utils import MODELS_DIR, get_logger, format_bytes, safe_model_path, rel_model_path, hf_headers
 
 logger = get_logger("downloader")
 
@@ -26,6 +28,19 @@ MAX_RETRIES = 8          # total attempts per file (1 initial + 7 retries)
 CHUNK_SIZE = 1024 * 512  # 512 KB chunks
 MANIFEST = MODELS_DIR / "manifest.json"
 _SHARD_RE = re.compile(r"-(\d{5})-of-(\d{5})\.gguf$", re.IGNORECASE)
+DISK_RESERVE = 1024 ** 3  # always leave 1 GB free for the OS
+
+
+class DiskSpaceError(Exception):
+    pass
+
+
+def disk_info() -> Dict[str, Any]:
+    u = shutil.disk_usage(MODELS_DIR)
+    used = sum(f.stat().st_size for f in MODELS_DIR.rglob("*") if f.is_file())
+    return {"path": str(MODELS_DIR), "free_bytes": u.free, "total_bytes": u.total,
+            "free_gb": round(u.free / 1024 ** 3, 1), "models_bytes": used,
+            "models_gb": round(used / 1024 ** 3, 2)}
 
 
 class DownloadJob(BaseModel):
@@ -189,12 +204,15 @@ async def _fetch_file(job: DownloadJob, url: str, dest: Path, expected: int,
 
         headers = {"Range": f"bytes={done}-"} if done > 0 else {}
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True, headers=headers) as client:
+            # httpx drops the Authorization header on the cross-host redirect to HF's CDN
+            async with httpx.AsyncClient(timeout=_TIMEOUT, follow_redirects=True,
+                                         headers={**hf_headers(), **headers}) as client:
                 async with client.stream("GET", url) as resp:
                     if resp.status_code == 416 and expected and done >= expected:
                         break  # already complete
                     if resp.status_code in (401, 403):
-                        job.status, job.error = "failed", "Access denied — this model is gated on HuggingFace"
+                        job.status, job.error = "failed", ("Access denied — this model is gated. Accept its "
+                                                           "license on HuggingFace and add your token in Settings.")
                         return False
                     if resp.status_code not in (200, 206):
                         job.status, job.error = "failed", f"HTTP {resp.status_code} for {dest.name}"
@@ -223,8 +241,18 @@ async def _fetch_file(job: DownloadJob, url: str, dest: Path, expected: int,
             if expected and done < expected:
                 raise httpx.ReadError(f"stream ended early ({done}/{expected} bytes)")
             break
+        except OSError as e:
+            if e.errno in (errno.ENOSPC, getattr(errno, "EDQUOT", -1)):
+                job.status, job.error = "failed", "The disk is full — free up space and download again (progress is kept)."
+                logger.error(f"Disk full while downloading {dest.name}")
+                return False
+            logger.warning(f"Download interrupted ({dest.name}) attempt {attempt}/{MAX_RETRIES}: {e}")
+            job.error = str(e)
+            if attempt == MAX_RETRIES:
+                job.status = "failed"
+                return False
         except (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError,
-                httpx.TimeoutException, ConnectionResetError, OSError) as e:
+                httpx.TimeoutException) as e:
             logger.warning(f"Download interrupted ({dest.name}) attempt {attempt}/{MAX_RETRIES}: {e}")
             job.error = str(e)
             if attempt == MAX_RETRIES:
@@ -292,7 +320,20 @@ def resolve_download(model_id: str, quant: str) -> Dict[str, Any]:
             files.append(mm)
     folder = _local_folder(model_id)
     primary = folder / group["files"][0]["path"].split("/")[-1]
-    return {"files": files, "folder": folder, "primary": primary, "quant": group["quant"]}
+
+    # Disk space: what is still missing (already-complete files and partial .tmp count as done)
+    need = 0
+    for f in files:
+        dest = folder / f["path"].split("/")[-1]
+        tmp = dest.with_name(dest.name + ".tmp")
+        have = dest.stat().st_size if dest.exists() else (tmp.stat().st_size if tmp.exists() else 0)
+        need += max(0, f["size"] - have)
+    free = shutil.disk_usage(MODELS_DIR).free
+    if need + DISK_RESERVE > free:
+        raise DiskSpaceError(f"Not enough disk space: this download needs {need / 1024 ** 3:.1f} GB "
+                             f"but only {free / 1024 ** 3:.1f} GB is free on the drive holding "
+                             f"{MODELS_DIR} (1 GB is kept free for the system).")
+    return {"files": files, "folder": folder, "primary": primary, "quant": group["quant"], "need": need}
 
 
 def start_download(model_id: str, quant: str, plan: Dict[str, Any]) -> DownloadJob:

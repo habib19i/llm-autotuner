@@ -24,6 +24,7 @@ class GPUInfo(BaseModel):
     # True when the GPU shares system RAM (iGPU / APU). Its "VRAM" is carved out of
     # system memory, so it must not be added on top of RAM when sizing models.
     integrated: bool = False
+    driver_version: str = ""   # NVIDIA driver (decides which CUDA build of llama.cpp can run)
 
 
 class HardwareProfile(BaseModel):
@@ -112,7 +113,7 @@ def _detect_gpu(win_gpu: Optional[dict]) -> GPUInfo:
 
     # --- NVIDIA via nvidia-smi (exact free/total VRAM) ---
     if shutil.which("nvidia-smi"):
-        out = _run(["nvidia-smi", "--query-gpu=gpu_name,memory.total,memory.free",
+        out = _run(["nvidia-smi", "--query-gpu=gpu_name,memory.total,memory.free,driver_version",
                     "--format=csv,noheader,nounits"], timeout=5)
         if out:
             parts = [p.strip() for p in out.split("\n")[0].split(",")]
@@ -123,6 +124,7 @@ def _detect_gpu(win_gpu: Optional[dict]) -> GPUInfo:
                         total_vram_gb=round(int(parts[1]) / 1024, 2),
                         free_vram_gb=round(int(parts[2]) / 1024, 2),
                         cuda=True, vulkan=True,
+                        driver_version=parts[3] if len(parts) > 3 else "",
                     )
                 except ValueError:
                     pass

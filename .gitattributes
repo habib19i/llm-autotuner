@@ -1,0 +1,4 @@
+* text=auto
+*.command text eol=lf
+*.sh text eol=lf
+*.plist text eol=lf

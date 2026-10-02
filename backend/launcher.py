@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 import httpx
 from pydantic import BaseModel
 from .runtime import find_server
-from .utils import LOG_DIR, LLM_PORT, MODELS_DIR, NO_WINDOW, get_logger, safe_model_path
+from .utils import LOG_DIR, LLM_PORT, MODELS_DIR, NO_WINDOW, get_logger, safe_model_path, llm_api_key
 
 logger = get_logger("launcher")
 
@@ -91,6 +91,7 @@ class LaunchStatus(BaseModel):
     base_url: str = f"http://127.0.0.1:{LLM_PORT}/v1"
     chat_url: str = f"http://127.0.0.1:{LLM_PORT}"
     dry_run: bool = False
+    api_key_required: bool = False
 
 
 def _tail_log(n: int = 25) -> str:
@@ -154,13 +155,18 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
     args: List[str] = ["-m", str(model_path), "-c", str(ctx), "-t", str(threads),
                        "-ngl", str(gpu_layers), "--port", str(LLM_PORT), "--host", "127.0.0.1",
                        "--alias", model_path.name]
+    # Without a key, any web page open in the browser could call the model server
+    key = llm_api_key()
+    if key:
+        args += ["--api-key", key]
     mmproj = sorted(p for p in model_path.parent.glob("*.gguf") if "mmproj" in p.name.lower())
     if mmproj and model_path.parent != MODELS_DIR.resolve():  # legacy flat files: no pairing
         args += ["--mmproj", str(mmproj[0])]
 
     exe = find_server()
     if not exe:
-        cmd = " ".join(["llama-server"] + [f'"{a}"' if " " in a else a for a in args])
+        cmd = " ".join(["llama-server"] + [f'"{a}"' if " " in a else ("***" if key and a == key else a)
+                                           for a in args])
         with _lock:
             _info = {
                 "running": False, "pid": None, "model": filename, "cmd": cmd, "dry_run": True,
@@ -176,6 +182,7 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
 
     cmd_vec = [exe] + args
     try:
+        shown_cmd = " ".join("***" if key and a == key else a for a in cmd_vec)
         with _lock:
             _log_fh = open(LOG_FILE, "w", encoding="utf-8", errors="replace")
             proc = subprocess.Popen(cmd_vec, stdout=_log_fh, stderr=subprocess.STDOUT,
@@ -189,8 +196,9 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
                 "running": True,
                 "pid": proc.pid,
                 "model": filename,
-                "cmd": " ".join(cmd_vec),
+                "cmd": shown_cmd,
                 "message": f"Loading {model_path.name} (PID {proc.pid})…",
+                "api_key_required": bool(key),
             }
             info = dict(_info)
         # Give it a moment to fail fast (bad model file, missing GPU driver, …)
@@ -212,7 +220,9 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
 
 def _health() -> bool:
     try:
-        r = httpx.get(f"http://127.0.0.1:{LLM_PORT}/health", timeout=1.0)
+        key = llm_api_key()
+        r = httpx.get(f"http://127.0.0.1:{LLM_PORT}/health", timeout=1.0,
+                      headers={"Authorization": f"Bearer {key}"} if key else {})
         return r.status_code == 200
     except Exception:
         return False

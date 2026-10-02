@@ -9,12 +9,17 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from .hardware import HardwareProfile, profile_hardware
-from .model_repository import get_models, quant_files, REPO_ID_RE
+import httpx
+
+from .model_repository import get_models, quant_files, REPO_ID_RE, add_custom_model, remove_custom_model
 from .selector import build_table, get_recommendation
-from .downloader import resolve_download, start_download, all_jobs, installed_models, cancel_job, delete_model
+from .downloader import (resolve_download, start_download, all_jobs, installed_models, cancel_job,
+                         delete_model, disk_info, DiskSpaceError)
 from .launcher import launch, stop, status as launch_status
 from . import runtime
-from .utils import APP_NAME, APP_VERSION, FRONTEND_DIR, get_logger
+from .benchmark_provider import get_arena, _refresh_in_background as refresh_arena
+from .utils import (APP_NAME, APP_VERSION, FRONTEND_DIR, LLM_PORT, get_logger, get_setting, set_setting,
+                    hf_token, llm_api_key, regenerate_api_key)
 
 logger = get_logger("app")
 
@@ -84,7 +89,41 @@ def api_models_override(req: HardwareProfile):
 @app.post("/api/refresh")
 def api_refresh():
     get_models(force=True)
+    refresh_arena()
     return {"ok": True, "count": len(build_table())}
+
+
+class CustomModelReq(BaseModel):
+    url: str = Field(..., max_length=500)
+
+
+@app.post("/api/models/custom")
+def api_add_custom(req: CustomModelReq):
+    try:
+        e = add_custom_model(req.url)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except (FileNotFoundError, LookupError) as e:
+        raise HTTPException(404, str(e))
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Could not reach HuggingFace: {e}")
+    return {"ok": True, "id": e.id, "name": e.name}
+
+
+@app.delete("/api/models/custom/{model_id:path}")
+def api_remove_custom(model_id: str):
+    if not remove_custom_model(model_id):
+        raise HTTPException(404, "Not a custom model")
+    return {"ok": True}
+
+
+@app.get("/api/benchmarks/info")
+def api_bench_info():
+    a = get_arena(refresh=False)
+    return {"source": "LMArena (lmarena-ai/leaderboard-dataset)", "published": a.get("published", ""),
+            "models": len(a.get("text") or {}), "fetched": a.get("ts", 0)}
 
 
 # ─── Recommendation ────────────────────────────────────────────────────────────
@@ -132,6 +171,8 @@ async def api_download(req: DownloadReq):
         plan = await asyncio.to_thread(resolve_download, req.model_id, req.quant)
     except (ValueError, LookupError) as e:
         raise HTTPException(400, str(e))
+    except DiskSpaceError as e:
+        raise HTTPException(507, str(e))
     except PermissionError as e:
         raise HTTPException(403, str(e))
     except FileNotFoundError as e:
@@ -139,6 +180,11 @@ async def api_download(req: DownloadReq):
     except Exception as e:
         raise HTTPException(502, f"Could not reach HuggingFace: {e}")
     return start_download(req.model_id, req.quant, plan)
+
+
+@app.get("/api/disk")
+def api_disk():
+    return disk_info()
 
 
 @app.get("/api/downloads")
@@ -177,13 +223,74 @@ def api_delete(filename: str):
 @app.get("/api/runtime")
 def api_runtime():
     g = profile_hardware().gpu
-    return runtime.status(g.vendor, g.integrated)
+    return runtime.status(g.vendor, g.integrated, g.driver_version)
+
+
+class RuntimeInstallReq(BaseModel):
+    variant: Optional[str] = Field(None, max_length=60, pattern=r"^[a-z0-9.\-]+$")
 
 
 @app.post("/api/runtime/install")
-async def api_runtime_install():
+async def api_runtime_install(req: Optional[RuntimeInstallReq] = None):
+    """Install, update, or switch the llama.cpp build (variant e.g. 'win-vulkan-x64')."""
     g = (await asyncio.to_thread(profile_hardware)).gpu
-    return runtime.start_install(g.vendor, g.integrated)
+    if not runtime.status(g.vendor, check_updates=False).installing:
+        await asyncio.to_thread(stop)  # a running llama-server locks its files on Windows
+    return runtime.start_install(g.vendor, g.integrated, g.driver_version, req.variant if req else None)
+
+
+# ─── Settings ──────────────────────────────────────────────────────────────────
+
+def _settings():
+    tok = hf_token()
+    key = llm_api_key()
+    return {
+        "hf_token_set": bool(tok),
+        "hf_token_hint": (tok[:5] + "…" + tok[-3:]) if len(tok) > 10 else "",
+        "hf_user": get_setting("hf_user", ""),
+        "api_key": key,
+        "api_key_enabled": bool(key),
+        "llm_base_url": f"http://127.0.0.1:{LLM_PORT}/v1",
+        "disk": disk_info(),
+    }
+
+
+@app.get("/api/settings")
+def api_settings():
+    return _settings()
+
+
+class TokenReq(BaseModel):
+    token: str = Field(..., min_length=8, max_length=200)
+
+
+@app.post("/api/settings/hf-token")
+def api_set_token(req: TokenReq):
+    tok = req.token.strip()
+    try:
+        r = httpx.get("https://huggingface.co/api/whoami-v2", timeout=15,
+                      headers={"Authorization": f"Bearer {tok}"})
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Could not reach HuggingFace to check the token: {e}")
+    if r.status_code != 200:
+        raise HTTPException(400, "HuggingFace rejected this token. Create a 'Read' token at "
+                                 "huggingface.co/settings/tokens and paste it here.")
+    set_setting("hf_token", tok)
+    set_setting("hf_user", r.json().get("name", ""))
+    return _settings()
+
+
+@app.delete("/api/settings/hf-token")
+def api_clear_token():
+    set_setting("hf_token", None)
+    set_setting("hf_user", None)
+    return _settings()
+
+
+@app.post("/api/settings/api-key/regenerate")
+def api_regen_key():
+    regenerate_api_key()
+    return _settings()
 
 
 # ─── Launcher ──────────────────────────────────────────────────────────────────

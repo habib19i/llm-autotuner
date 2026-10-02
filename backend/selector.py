@@ -6,7 +6,7 @@ from typing import List, Optional, Tuple
 from pydantic import BaseModel
 from .hardware import HardwareProfile, profile_hardware
 from .model_repository import ModelEntry, QuantOption, get_models, FULL_PRECISION
-from .benchmark_provider import Benchmarks, get_benchmarks
+from .benchmark_provider import Benchmarks, catalog_benchmarks, rating_to_score
 from .scoring import MemResult, estimate_memory, persona_score
 
 
@@ -36,14 +36,23 @@ class ModelRow(BaseModel):
     is_moe: bool
     size_gb: float
     hf_url: str
-    # Extended detail
-    swe_bench: float
-    humaneval: float
-    gpqa: float
-    ifeval: float
-    mmlu: float
-    arena_elo: int
+    publisher: str
+    base_model: str
+    sources: List[str]
+    gated: bool
+    custom: bool
+    # Quality data (published numbers are None when not published for this model)
+    swe_bench: Optional[float]
+    humaneval: Optional[float]
+    gpqa: Optional[float]
+    ifeval: Optional[float]
+    mmlu: Optional[float]
+    rating: int                # LMArena rating, measured or estimated
+    arena_elo: Optional[int]   # measured only
+    arena_coding: Optional[int]
+    arena_vision: Optional[int]
     bench_estimated: bool
+    bench_source: str
     total_req_gb: float
     gpu_layers: int
     vram_headroom_gb: float
@@ -61,22 +70,8 @@ class RecommendationDetail(BaseModel):
     launch_gpu_layers: int
 
 
-def _composite_score(bench: Benchmarks, is_coding: bool, is_reasoning: bool) -> int:
-    """Single 0–100 score like llmfit's 'Score' column."""
-    weights = [
-        (bench.mmlu, 0.30),
-        (bench.humaneval, 0.25 if is_coding else 0.10),
-        (bench.gpqa, 0.20 if is_reasoning else 0.10),
-        (bench.ifeval, 0.15),
-        (bench.swe_bench, 0.20 if is_coding else 0.05),
-    ]
-    total_w = sum(w for _, w in weights)
-    score = sum(v * w for v, w in weights) / total_w
-    return min(100, int(score))
-
-
-def _bench(m: ModelEntry) -> Benchmarks:
-    return get_benchmarks(m.id, m.params_b, m.is_coding, m.is_reasoning, m.active_params_b)
+def _benches(models: List[ModelEntry]):
+    return catalog_benchmarks(models)
 
 
 def _candidate_quants(m: ModelEntry) -> List[QuantOption]:
@@ -129,7 +124,7 @@ def _row(m: ModelEntry, q: QuantOption, mem: MemResult, bench: Benchmarks) -> Mo
         id=m.id, name=m.name, provider=m.provider, family=m.family,
         params_b=m.params_b, params_label=_params_label(m),
         active_params_b=m.active_params_b or m.params_b,
-        score=_composite_score(bench, m.is_coding, m.is_reasoning),
+        score=rating_to_score(bench.rating),
         tok_s=mem.tok_s, quant=q.quant, filename=q.filename,
         all_quants=[x.quant for x in m.quants],
         mode=mem.mode, mem_pct=mem.mem_pct,
@@ -137,9 +132,12 @@ def _row(m: ModelEntry, q: QuantOption, mem: MemResult, bench: Benchmarks) -> Mo
         fit=mem.fit, use_case=m.use_case,
         is_vision=m.is_vision, is_coding=m.is_coding, is_reasoning=m.is_reasoning, is_moe=m.is_moe,
         size_gb=q.size_gb, hf_url=m.hf_url,
+        publisher=m.publisher, base_model=m.base_model, sources=list(m.sources),
+        gated=m.gated, custom=m.custom,
         swe_bench=bench.swe_bench, humaneval=bench.humaneval, gpqa=bench.gpqa,
-        ifeval=bench.ifeval, mmlu=bench.mmlu, arena_elo=bench.arena_elo,
-        bench_estimated=bench.estimated,
+        ifeval=bench.ifeval, mmlu=bench.mmlu, rating=int(round(bench.rating)),
+        arena_elo=bench.arena_elo, arena_coding=bench.arena_coding, arena_vision=bench.arena_vision,
+        bench_estimated=bench.estimated, bench_source=bench.source,
         total_req_gb=mem.total_req_gb, gpu_layers=mem.gpu_layers,
         vram_headroom_gb=mem.vram_headroom_gb, launch_ctx=mem.ctx,
         downloads=m.downloads,
@@ -153,9 +151,11 @@ def build_table(hw: Optional[HardwareProfile] = None) -> List[ModelRow]:
     if hw is None:
         hw = profile_hardware()
     rows: List[ModelRow] = []
-    for m in get_models():
+    models = get_models()
+    benches = _benches(models)
+    for m in models:
         q, mem = pick_quant(m, hw)
-        rows.append(_row(m, q, mem, _bench(m)))
+        rows.append(_row(m, q, mem, benches[m.id]))
     rows.sort(key=lambda r: (FIT_ORDER.get(r.fit, 9), -r.score, -r.tok_s))
     return rows
 
@@ -163,11 +163,12 @@ def build_table(hw: Optional[HardwareProfile] = None) -> List[ModelRow]:
 def get_recommendation(model_id: str, persona: str, hw: Optional[HardwareProfile] = None) -> RecommendationDetail:
     if hw is None:
         hw = profile_hardware()
-    m = next((x for x in get_models() if x.id == model_id), None)
+    models = get_models()
+    m = next((x for x in models if x.id == model_id), None)
     if m is None:
         raise ValueError(f"Model not found: {model_id}")
 
-    bench = _bench(m)
+    bench = _benches(models)[m.id]
 
     # Choose best quant for persona + hardware. Below ~4 bits quality drops sharply, so
     # only go there when no 4-bit-or-better quant fits at all.
@@ -200,11 +201,16 @@ def get_recommendation(model_id: str, persona: str, hw: Optional[HardwareProfile
     }.get(best_mem.fit, "runs on your system")
 
     why_parts = [f"{m.name} ({best_quant.quant}, ~{best_quant.size_gb} GB) {fit_phrase}."]
-    est = " (estimated)" if bench.estimated else ""
-    if m.is_coding:
-        why_parts.append(f"Coding strength: {bench.swe_bench}% SWE-bench, {bench.humaneval}% HumanEval{est}.")
-    if m.is_reasoning:
-        why_parts.append(f"Reasoning: {bench.gpqa}% GPQA{est}.")
+    if bench.arena_elo:
+        why_parts.append(f"LMArena rating {bench.arena_elo}"
+                         + (f" (WebDev/coding {bench.arena_coding})" if bench.arena_coding else "") + ".")
+    else:
+        why_parts.append(f"Not on the LMArena leaderboard; its quality score is estimated (~{int(bench.rating)}) "
+                         f"from size and release date.")
+    if m.is_coding and bench.swe_bench is not None:
+        why_parts.append(f"Published coding results: {bench.swe_bench}% SWE-bench, {bench.humaneval}% HumanEval.")
+    if m.is_reasoning and bench.gpqa is not None:
+        why_parts.append(f"Published reasoning result: {bench.gpqa}% GPQA.")
     if m.is_moe and m.active_params_b < m.params_b:
         why_parts.append(f"Mixture-of-experts: only {m.active_params_b}B of {m.params_b}B parameters "
                          f"are active per token, so it runs much faster than its size suggests.")

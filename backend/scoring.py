@@ -160,22 +160,38 @@ def persona_score(model: ModelEntry, quant: QuantOption, bench, mem: MemResult, 
     speed = min(1.0, mem.tok_s / 40.0)
     fit_penalty = {"Perfect": 1.0, "Good": 0.9, "Marginal": 0.65, "No Fit": 0.0}.get(mem.fit, 0.5)
 
+    # General intelligence from the arena rating (measured or estimated), 0–1
+    base = max(0.0, min(1.0, (bench.rating - 1000) / 540))
+
+    def pub(*vals_weights):
+        vals = [(v, w) for v, w in vals_weights if v is not None]
+        if not vals:
+            return None
+        return sum(v * w for v, w in vals) / sum(w for _, w in vals) / 100.0
+
     p = persona.lower()
     if p == "coding":
-        intel = (bench.swe_bench * 0.55 + bench.humaneval * 0.45) / 100.0
+        coding = (max(0.0, min(1.0, (bench.arena_coding - 1000) / 600)) if bench.arena_coding
+                  else pub((bench.swe_bench, 0.55), (bench.humaneval, 0.45)))
+        intel = (base * 0.5 + coding * 0.5) if coding is not None else base
+        intel = min(1.0, intel + (0.06 if model.is_coding else 0.0))
         raw = intel * 0.55 + qual * 0.25 + speed * 0.20
     elif p == "vision":
-        vis_bonus = 0.5 if model.is_vision else 0.0
-        raw = bench.mmlu / 100.0 * 0.3 + vis_bonus + speed * 0.2
+        vis = max(0.0, min(1.0, (bench.arena_vision - 1000) / 400)) if bench.arena_vision else base
+        raw = (vis * 0.3 + (0.5 if model.is_vision else 0.0)) + speed * 0.2
     elif p == "stem":
-        intel = (bench.gpqa * 0.60 + bench.mmlu * 0.40) / 100.0
+        sci = pub((bench.gpqa, 0.6), (bench.mmlu, 0.4))
+        intel = (base * 0.6 + sci * 0.4) if sci is not None else base
+        intel = min(1.0, intel + (0.06 if model.is_reasoning else 0.0))
         raw = intel * 0.65 + qual * 0.20 + speed * 0.15
     elif p == "story":
         ctx_f = min(1.0, mem.ctx / 16384.0)
-        raw = ctx_f * 0.30 + bench.mmlu / 100.0 * 0.40 + speed * 0.15 + qual * 0.15
+        raw = ctx_f * 0.30 + base * 0.40 + speed * 0.15 + qual * 0.15
     elif p == "instruction":
-        raw = bench.ifeval / 100.0 * 0.50 + speed * 0.30 + qual * 0.20
+        ife = pub((bench.ifeval, 1.0))
+        intel = (base * 0.5 + ife * 0.5) if ife is not None else base
+        raw = intel * 0.50 + speed * 0.30 + qual * 0.20
     else:  # assistant / general
-        raw = speed * 0.35 + bench.mmlu / 100.0 * 0.40 + qual * 0.25
+        raw = speed * 0.35 + base * 0.40 + qual * 0.25
 
     return round(min(1.0, raw) * fit_penalty * 100.0, 1)

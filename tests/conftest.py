@@ -31,6 +31,10 @@ def offline(monkeypatch):
     """No network and a deterministic machine for every test."""
     monkeypatch.setattr(model_repository, "_fetch_hf", lambda: model_repository._fallback())
     monkeypatch.setattr(model_repository, "_mem_cache", None)
+    model_repository.CUSTOM_FILE.unlink(missing_ok=True)
+    from backend import benchmark_provider, runtime
+    monkeypatch.setattr(benchmark_provider, "_refresh_in_background", lambda: None)
+    monkeypatch.setattr(runtime, "releases_nonblocking", lambda: None)
     model_repository.CACHE_FILE.unlink(missing_ok=True)
     hw = make_hw()
     monkeypatch.setattr(hardware, "profile_hardware", lambda: hw)

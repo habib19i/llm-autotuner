@@ -1,70 +1,127 @@
 # LLM Autotuner
 
-Hardware-aware local LLM deployment. It scans your PC, ranks ~160 current GGUF models
-from HuggingFace (Unsloth) by how well they fit **your** memory, downloads the right
-quantization, installs the llama.cpp runtime, and starts an OpenAI-compatible API server —
-all from a local web UI.
+Hardware-aware local LLM deployment. It scans your computer, ranks ~290 current GGUF models
+from HuggingFace by how well they fit **your** memory, downloads the right quantization,
+installs the llama.cpp runtime, and starts an OpenAI-compatible API server — all from a
+local web UI. Windows, macOS and Linux.
 
 - **Simple mode** — a 5-step wizard: scan → hardware → workflow → model → deploy.
 - **Pro mode** — the full sortable/filterable model table, per-workflow tuning, exact
-  per-quant file sizes, download / launch / delete.
+  per-quant file sizes, multiple download sources, download / launch / delete.
 
 Everything runs on `127.0.0.1`; nothing is exposed to the network.
 
-## Using the app (end users)
+## Download
 
-1. Download `AI_Model_Autotuner.exe` and put it in its own folder (it stores data next to itself).
-2. Double-click it. Your browser opens at `http://127.0.0.1:8001/`.
-3. Follow the wizard. On first launch the app downloads the llama.cpp runtime automatically
-   (one time).
-4. When the model is running, connect any OpenAI-compatible client:
+Get the latest version from the **[Releases page](https://github.com/habib19i/llm-autotuner/releases/latest)**:
 
-   | Setting  | Value                          |
-   |----------|--------------------------------|
-   | Base URL | `http://127.0.0.1:8080/v1`     |
-   | API key  | any value (e.g. `sk-local`)    |
+| Your computer | File | How to start |
+|---|---|---|
+| Windows 10/11 (64-bit) | `AI_Model_Autotuner-windows-x64.exe` | Put it in its own folder and double-click it. If SmartScreen warns, click **More info → Run anyway**. |
+| Mac with Apple Silicon (M1–M4) | `AI_Model_Autotuner-macos-arm64.zip` | Unzip, double-click **Start LLM Autotuner.command**. If macOS blocks it: **System Settings → Privacy & Security → Open Anyway**. |
+| Linux (x64) | `AI_Model_Autotuner-linux-x64.tar.gz` | `tar xzf AI_Model_Autotuner-linux-x64.tar.gz && ./llm-autotuner/AI_Model_Autotuner` |
+
+Intel Macs and other systems: [run from source](#run-from-source).
+
+## Using the app
+
+1. Start it as above. Your browser opens at `http://127.0.0.1:8001/`.
+2. Follow the wizard. On first launch the app downloads the right llama.cpp build for your
+   machine automatically (CUDA for NVIDIA GPUs, Vulkan for AMD/Intel, Metal on Mac).
+3. When the model is running, connect any OpenAI-compatible client (VS Code, Cursor,
+   Open WebUI, Obsidian…):
+
+   | Setting  | Value |
+   |----------|-------|
+   | Base URL | `http://127.0.0.1:8080/v1` |
+   | API key  | shown in the app (⚙ Settings, and on the Deploy step) |
    | Model    | the `.gguf` file name shown in the app |
 
-   llama.cpp's own chat UI is at `http://127.0.0.1:8080` ("Open chat ↗" in the app).
+   llama.cpp's own chat page is at `http://127.0.0.1:8080` ("Open chat ↗" in the app). It
+   copies the API key for you — paste it into the chat page's settings if it asks.
 
-Closing the console window stops the app and the model server.
+Closing the app's window stops the app and the model server.
 
-### Data folders (created next to the .exe)
+### Settings (⚙)
+
+- **HuggingFace token** — only needed for gated models (e.g. Llama). Accept the model's
+  license on HuggingFace, create a *Read* token at huggingface.co/settings/tokens, paste it.
+- **Model API key** — required by the running model so other websites open in your browser
+  can't use it. Copy it or generate a new one.
+- **llama.cpp runtime** — current version and build, one-click updates, and a switch to the
+  Vulkan build if the CUDA build doesn't start on your PC.
+- **Storage** — where models are stored and how much space is free. Every download is
+  checked against free disk space first.
+
+### More models
+
+- The catalog combines **Unsloth, bartowski, LM Studio Community and ggml-org**. When several
+  publish the same model, the download dialog lets you pick the source.
+- **＋ Add model** (Pro mode) accepts any HuggingFace link to a repository with `.gguf` files.
+
+### Data folders (created next to the app)
 
 | Folder    | Contents |
 |-----------|----------|
 | `models/` | Downloaded models, one folder per repo (multi-part models and vision projectors are kept together) |
 | `bin/`    | The llama.cpp runtime |
-| `cache/`  | Model catalog cache (refreshed every 24 h, or via **Refresh** in Pro mode) |
+| `cache/`  | Model catalog, quality ratings and settings |
 | `logs/`   | `llama-server.log` — check this if a model fails to start |
 
 ### Options
 
 ```
-AI_Model_Autotuner.exe [--port 8001] [--no-browser]
+AI_Model_Autotuner [--port 8001] [--no-browser]
 ```
 
 | Environment variable  | Default | Purpose |
 |-----------------------|---------|---------|
 | `AUTOTUNER_PORT`      | `8001`  | Web UI port (falls back to the next free port if busy) |
 | `AUTOTUNER_LLM_PORT`  | `8080`  | Port of the model API server |
-| `AUTOTUNER_HOME`      | exe folder | Where `models/`, `bin/`, `cache/`, `logs/` live |
+| `AUTOTUNER_HOME`      | app folder | Where `models/`, `bin/`, `cache/`, `logs/` live |
+| `AUTOTUNER_API_KEY`   | generated | Fixed API key for the model server (empty string disables it) |
+| `HF_TOKEN`            | —       | HuggingFace token (alternative to Settings) |
 
 If you already have `llama-server` on your `PATH` or in `bin/`, it is used instead of
 downloading one.
 
-## Development
+## Run from source
 
-Requires Python 3.10+.
+Works on Windows, macOS (Intel and Apple Silicon) and Linux. Requires Python 3.10+
+(macOS: install from [python.org](https://www.python.org/downloads/macos/)).
 
-```powershell
-python -m venv .venv
-.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.venv\Scripts\python.exe main.py --browser      # http://127.0.0.1:8001
-.venv\Scripts\python.exe -m pytest              # offline test suite
+**macOS / Linux**
+
+```bash
+git clone https://github.com/habib19i/llm-autotuner.git
+cd llm-autotuner
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python main.py --browser
 ```
 
-API docs are served at `http://127.0.0.1:8001/api/docs`.
+Next time: `cd llm-autotuner && source .venv/bin/activate && python main.py --browser`.
+
+**Windows**
+
+```powershell
+git clone https://github.com/habib19i/llm-autotuner.git
+cd llm-autotuner
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe main.py --browser
+```
+
+## Development
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest              # offline test suite
+```
+
+API docs are served at `http://127.0.0.1:8001/api/docs`. CI runs the tests on Windows,
+macOS and Linux for every push.
 
 ### Project layout
 
@@ -73,39 +130,52 @@ main.py                    entry point (port selection, single-instance check, b
 backend/
   app.py                   FastAPI routes + localhost-only guards
   hardware.py              CPU / RAM / GPU detection (NVIDIA, AMD, Intel, Apple; iGPU aware)
-  model_repository.py      HuggingFace catalog (GGUF metadata), quant parsing, offline fallback
+  model_repository.py      HuggingFace catalog (4 publishers), custom models, quant parsing
+  benchmark_provider.py    LMArena ratings, published benchmarks, calibrated estimates
+  data/arena_snapshot.json bundled ratings for first run / offline
   scoring.py               memory fit, GPU offload, context size, tok/s estimate
   selector.py              table rows + per-workflow recommendations
-  benchmark_provider.py    published benchmarks, size-based estimates otherwise (marked ~)
-  downloader.py            resumable multi-file downloads, installed-model registry
-  runtime.py               llama.cpp release download/installation
-  launcher.py              llama-server process management + health check
+  downloader.py            resumable multi-file downloads, disk checks, installed models
+  runtime.py               llama.cpp build selection (CUDA/Vulkan/Metal/CPU), install, updates
+  launcher.py              llama-server process management, API key, health check
 frontend/index.html        single-file UI (EN / 中文, dark / light)
+packaging/                 release notes, macOS launcher, signing entitlements
+.github/workflows/         CI tests + release builds for Windows, macOS, Linux
 tests/                     pytest suite (no network needed)
 ```
 
-### Building the Windows executable
+### Building locally
 
 Build from a clean virtual environment (a full Anaconda base env makes PyInstaller fail —
 see the notes at the top of `build.py`):
 
-```powershell
+```bash
 python -m venv .buildvenv
-.buildvenv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.buildvenv\Scripts\python.exe build.py          # runs the tests, then PyInstaller
+# Windows: .buildvenv\Scripts\python.exe   macOS/Linux: .buildvenv/bin/python
+<venv-python> -m pip install -r requirements-dev.txt
+<venv-python> build.py          # runs the tests, then PyInstaller → dist/
 ```
 
-The result is `dist\AI_Model_Autotuner.exe` (~20 MB, single file). macOS / Linux builds
-work the same way with `python build.py` on those platforms.
+### Releasing
 
-### Release checklist
+Push a version tag; GitHub Actions builds Windows, macOS and Linux, smoke-tests each build,
+and publishes a release with all three downloads and `packaging/RELEASE_NOTES.md`:
 
-1. `python -m pytest` passes.
-2. `python build.py` produces `dist/AI_Model_Autotuner.exe`.
-3. Copy the exe to an empty folder, run it, and complete the wizard with a small model
-   (e.g. *SmolLM2 135M* in Pro mode) to confirm download → runtime install → launch → chat.
-4. Publish the exe (e.g. as a GitHub release asset). Windows SmartScreen will warn about an
-   unsigned executable; code-sign it to avoid that.
+```bash
+git tag v2.2.0
+git push origin v2.2.0
+```
+
+### Code signing (optional)
+
+Unsigned builds work, but Windows SmartScreen and macOS Gatekeeper show warnings. The release
+workflow signs automatically when these repository secrets exist
+(Settings → Secrets and variables → Actions):
+
+| Platform | Secrets | Where to get a certificate |
+|---|---|---|
+| Windows | `WINDOWS_CERT_PFX` (base64 of the .pfx), `WINDOWS_CERT_PASSWORD` | A code-signing certificate from a CA (e.g. Sectigo, DigiCert), or [SignPath](https://signpath.org) (free for open source) |
+| macOS | `MACOS_CERT_P12` (base64), `MACOS_CERT_PASSWORD`, `MACOS_CODESIGN_IDENTITY` (e.g. `Developer ID Application: Name (TEAMID)`), and for notarization `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | [Apple Developer Program](https://developer.apple.com/programs/) |
 
 ## How recommendations work
 
@@ -117,8 +187,11 @@ work the same way with `python build.py` on those platforms.
   weight are flagged *Marginal*.
 - **Speed**: token generation is memory-bandwidth bound, so tok/s ≈ bandwidth ÷ bytes of
   *active* weights — which is why mixture-of-experts models (e.g. `30B-A3B`) run fast.
-- **Benchmarks**: published scores for known models; others are estimated from size and
-  shown with `~`.
+- **Quality**: the *Score* column is based on [LMArena](https://lmarena.ai) ratings from
+  its public leaderboard dataset (open-weight models, refreshed daily). Models that aren't on
+  the leaderboard get a rating estimated from their size and release date, calibrated on the
+  measured models, and are marked with `~`. Published benchmark results (MMLU, HumanEval…)
+  are shown only for the exact models they were published for.
 
 ## License
 

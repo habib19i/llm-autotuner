@@ -13,10 +13,12 @@ import threading
 from typing import Any, Dict, List, Optional, Tuple
 import httpx
 from pydantic import BaseModel
-from .utils import CACHE_DIR, get_logger
+from concurrent.futures import ThreadPoolExecutor
+from .utils import CACHE_DIR, get_logger, hf_headers
 
 logger = get_logger("model_repo")
-CACHE_FILE = CACHE_DIR / "models_v3.json"
+CACHE_FILE = CACHE_DIR / "models_v4.json"
+CUSTOM_FILE = CACHE_DIR / "custom_models.json"
 CACHE_TTL = 86400  # 24 hours
 HF_API = "https://huggingface.co/api"
 HF_TIMEOUT = httpx.Timeout(20.0, connect=10.0)
@@ -126,6 +128,11 @@ class ModelEntry(BaseModel):
     updated: str        # YYYY-MM-DD
     hf_url: str
     use_case: str = ""  # Chat / Coding / Vision / Reasoning
+    base_model: str = ""          # original repo the GGUF was made from, e.g. Qwen/Qwen3-8B
+    publisher: str = ""           # who made the GGUF (unsloth, bartowski, …)
+    sources: List[str] = []       # every GGUF repo of this base model, preferred first
+    gated: bool = False           # needs a HuggingFace token + accepted license
+    custom: bool = False          # added by the user from a HuggingFace link
 
 
 # ─── Classification helpers ────────────────────────────────────────────────────
@@ -208,10 +215,24 @@ _CODING_RE = re.compile(r"coder|code|devstral|codestral|starcoder|codegemma", re
 _REASON_RE = re.compile(r"thinking|reason|-r1|qwq|gpt-oss|magistral|phi-4-reasoning", re.I)
 
 
+_ORG_PREFIX = re.compile(r"^[A-Za-z0-9.-]+_(?=[A-Za-z])")
+
+
+def _display_stem(rid: str, base_model: str = "") -> str:
+    """Human name stem: the repo name without -GGUF and without bartowski's 'Org_' prefix
+    ('bartowski/Qwen_Qwen3-8B-GGUF' -> 'Qwen3-8B'). The base model only breaks ties when the
+    repo name is not descriptive."""
+    stem = re.sub(r"-GGUF$", "", rid.split("/")[-1], flags=re.I)
+    stem = _ORG_PREFIX.sub("", stem)
+    if base_model and len(stem) < 3:
+        return base_model.split("/")[-1]
+    return stem
+
+
 def _entry(rid: str, params_b: float, context: int, files: List[str], is_vision: bool,
-           downloads: int = 0, likes: int = 0, updated: str = "", arch: str = "") -> Optional[ModelEntry]:
-    rname = rid.split("/")[-1]
-    rname = re.sub(r"-GGUF$", "", rname, flags=re.I)
+           downloads: int = 0, likes: int = 0, updated: str = "", arch: str = "",
+           base_model: str = "", gated: bool = False) -> Optional[ModelEntry]:
+    rname = _display_stem(rid, base_model)
     active, is_moe = _active_params(rname, params_b)
     if arch.endswith("moe") or arch in ("deepseek2", "deepseek4", "glm4moe", "gpt-oss", "llama4"):
         is_moe = True
@@ -233,7 +254,7 @@ def _entry(rid: str, params_b: float, context: int, files: List[str], is_vision:
     m = dict(
         id=rid,
         name=rname.replace("-", " ").replace("_", " "),
-        provider=_derive_provider(rname),
+        provider=_derive_provider(base_model or rname),
         family=arch or rname.split("-")[0].lower(),
         params_b=round(params_b, 2),
         active_params_b=round(active, 2),
@@ -247,42 +268,93 @@ def _entry(rid: str, params_b: float, context: int, files: List[str], is_vision:
         likes=likes,
         updated=(updated or "")[:10],
         hf_url=f"https://huggingface.co/{rid}",
+        base_model=base_model,
+        publisher=rid.split("/")[0],
+        sources=[rid],
+        gated=gated,
     )
     m["use_case"] = _derive_use_case(m)
     return ModelEntry(**m)
+
+
+def _base_model_of(item: Dict) -> str:
+    tags = item.get("tags") or []
+    for t in tags:
+        if t.startswith("base_model:quantized:"):
+            return t.split(":", 2)[2]
+    for t in tags:
+        if t.startswith("base_model:") and t.count(":") == 1:
+            return t.split(":", 1)[1]
+    return ""
+
+
+# Repos that load in llama.cpp but aren't chat models (speech, embeddings, rerankers, raw exports)
+_NON_CHAT_NAME = re.compile(r"(^|[-_.])(tts|asr|whisper|embed|embedding|embeddings|rerank|reranker|"
+                            r"unquantized|transformers|vae|speech|audio)([-_.]|$)", re.I)
+
+
+def _from_hf_item(item: Dict, require_meta: bool = True) -> Optional[ModelEntry]:
+    rid = item.get("id", "")
+    if not REPO_ID_RE.match(rid):
+        return None
+    if require_meta and _NON_CHAT_NAME.search(rid.split("/")[-1]):
+        return None
+    gguf = item.get("gguf") or {}
+    arch = (gguf.get("architecture") or "").lower()
+    if item.get("pipeline_tag") in _NON_CHAT_PIPELINES or arch in _NON_CHAT_ARCH:
+        return None
+    context = gguf.get("context_length")
+    if not context and require_meta:
+        return None  # diffusion/image models carry no context length
+    base = _base_model_of(item)
+    total = gguf.get("total")
+    params_b = total / 1e9 if total else _params_from_name(_display_stem(rid, base))
+    if not params_b:
+        return None
+    files = [s.get("rfilename", "") for s in item.get("siblings") or []]
+    is_vision = any("mmproj" in f.lower() for f in files)
+    try:
+        return _entry(rid, params_b, int(context or 8192), files, is_vision,
+                      downloads=item.get("downloads") or 0, likes=item.get("likes") or 0,
+                      updated=item.get("lastModified") or "", arch=arch, base_model=base,
+                      gated=bool(item.get("gated")))
+    except Exception as ex:
+        logger.debug(f"Skipping {rid}: {ex}")
+        return None
 
 
 def _from_hf(data: List[Dict]) -> List[ModelEntry]:
     results: List[ModelEntry] = []
     for item in data:
         rid = item.get("id", "")
-        if not rid.upper().endswith("-GGUF") or not REPO_ID_RE.match(rid):
-            continue
-        if re.search(r"-MTP-GGUF$", rid, re.I):
-            continue  # duplicate of the base repo with speculative-decoding heads
-        gguf = item.get("gguf") or {}
-        arch = (gguf.get("architecture") or "").lower()
-        pipeline = item.get("pipeline_tag")
-        if pipeline in _NON_CHAT_PIPELINES or arch in _NON_CHAT_ARCH:
-            continue
-        context = gguf.get("context_length")
-        if not context:
-            continue  # diffusion/image models carry no context length
-        total = gguf.get("total")
-        params_b = total / 1e9 if total else _params_from_name(rid.split("/")[-1])
-        if not params_b:
-            continue
-        files = [s.get("rfilename", "") for s in item.get("siblings") or []]
-        is_vision = any("mmproj" in f.lower() for f in files)
-        try:
-            e = _entry(rid, params_b, int(context), files, is_vision,
-                       downloads=item.get("downloads") or 0, likes=item.get("likes") or 0,
-                       updated=item.get("lastModified") or "", arch=arch)
-            if e:
-                results.append(e)
-        except Exception as ex:
-            logger.debug(f"Skipping {rid}: {ex}")
+        if not rid.upper().endswith("-GGUF") or re.search(r"-MTP-GGUF$", rid, re.I):
+            continue  # MTP repos duplicate the base repo with speculative-decoding heads
+        e = _from_hf_item(item)
+        if e:
+            results.append(e)
     return results
+
+
+def _dedupe_key(m: ModelEntry) -> str:
+    if m.base_model:
+        return m.base_model.lower()
+    return re.sub(r"[\s_-]+", "-", m.name.lower())
+
+
+def merge_sources(models: List[ModelEntry]) -> List[ModelEntry]:
+    """One entry per base model. `models` must be ordered by source priority; the first
+    repo seen becomes the entry, the others are recorded as alternative sources."""
+    merged: Dict[str, ModelEntry] = {}
+    for m in models:
+        k = _dedupe_key(m)
+        if k not in merged:
+            merged[k] = m
+        else:
+            keep = merged[k]
+            if m.id not in keep.sources:
+                keep.sources.append(m.id)
+            keep.downloads += m.downloads
+    return list(merged.values())
 
 
 # ─── Offline fallback dataset ──────────────────────────────────────────────────
@@ -332,22 +404,111 @@ def _fallback() -> List[ModelEntry]:
 _lock = threading.Lock()
 _mem_cache: Optional[Tuple[float, List[ModelEntry]]] = None
 
+# GGUF publishers, in order of preference when several host the same base model
+SOURCES: List[Tuple[str, int, int]] = [
+    # (author, how many repos to scan, minimum downloads)
+    ("unsloth", 200, 0),
+    ("bartowski", 150, 3000),
+    ("lmstudio-community", 100, 3000),
+    ("ggml-org", 60, 1000),
+]
+_EXPAND = ("gguf", "siblings", "downloads", "likes", "lastModified", "pipeline_tag", "tags", "gated")
+
+
+def _fetch_author(c: httpx.Client, author: str, limit: int, min_dl: int) -> List[ModelEntry]:
+    params = [("author", author), ("search", "GGUF"), ("limit", str(limit)), ("sort", "downloads")]
+    params += [("expand[]", x) for x in _EXPAND]
+    r = c.get(f"{HF_API}/models", params=params)
+    r.raise_for_status()
+    data = [i for i in r.json() if (i.get("downloads") or 0) >= min_dl]
+    return _from_hf(data)
+
 
 def _fetch_hf() -> List[ModelEntry]:
-    params = [("author", "unsloth"), ("search", "GGUF"), ("limit", "200"), ("sort", "downloads")]
-    params += [("expand[]", x) for x in ("gguf", "siblings", "downloads", "likes",
-                                         "lastModified", "pipeline_tag")]
-    with httpx.Client(timeout=HF_TIMEOUT, follow_redirects=True) as c:
-        r = c.get(f"{HF_API}/models", params=params)
-        r.raise_for_status()
-        return _from_hf(r.json())
+    per_source: List[List[ModelEntry]] = []
+    with httpx.Client(timeout=HF_TIMEOUT, follow_redirects=True, headers=hf_headers()) as c:
+        with ThreadPoolExecutor(max_workers=len(SOURCES)) as ex:
+            futures = [ex.submit(_fetch_author, c, a, n, d) for a, n, d in SOURCES]
+            for (author, _, _), f in zip(SOURCES, futures):
+                try:
+                    per_source.append(f.result())
+                except Exception as e:
+                    logger.warning(f"HF fetch for {author} failed: {e}")
+                    per_source.append([])
+    if not any(per_source):
+        raise RuntimeError("no catalog data")
+    return merge_sources([m for group in per_source for m in group])
+
+
+# ─── User-added models (paste a HuggingFace link) ──────────────────────────────
+
+def _read_custom() -> List[ModelEntry]:
+    try:
+        return [ModelEntry(**m) for m in json.loads(CUSTOM_FILE.read_text(encoding="utf-8"))]
+    except Exception:
+        return []
+
+
+def _write_custom(entries: List[ModelEntry]):
+    CUSTOM_FILE.write_text(json.dumps([e.model_dump() for e in entries], indent=1), encoding="utf-8")
+
+
+_URL_RE = re.compile(r"^(?:https?://)?(?:www\.)?(?:huggingface\.co|hf\.co)/([^/?#\s]+)/([^/?#\s]+)")
+
+
+def parse_repo_id(text: str) -> str:
+    """Accept 'owner/name', 'hf.co/owner/name' or any huggingface.co URL inside the repo."""
+    t = (text or "").strip()
+    m = _URL_RE.match(t)
+    rid = f"{m.group(1)}/{m.group(2)}" if m else t.strip("/")
+    if not REPO_ID_RE.match(rid) or rid.split("/")[0] in ("datasets", "spaces", "models"):
+        raise ValueError("Enter a HuggingFace model link like https://huggingface.co/owner/model-GGUF")
+    return rid
+
+
+def add_custom_model(text: str) -> ModelEntry:
+    global _mem_cache
+    rid = parse_repo_id(text)
+    params = [("expand[]", x) for x in _EXPAND]
+    with httpx.Client(timeout=HF_TIMEOUT, follow_redirects=True, headers=hf_headers()) as c:
+        r = c.get(f"{HF_API}/models/{rid}", params=params)
+    if r.status_code in (401, 403):
+        raise PermissionError("This repository is private or gated. Add a HuggingFace token in Settings.")
+    if r.status_code == 404:
+        raise FileNotFoundError(f"Model '{rid}' was not found on HuggingFace")
+    r.raise_for_status()
+    item = r.json()
+    item["id"] = item.get("id") or rid
+    e = _from_hf_item(item, require_meta=False)
+    if e is None:
+        raise LookupError("No GGUF model files found in this repository (llama.cpp needs .gguf files)")
+    e.custom = True
+    with _lock:
+        _write_custom([x for x in _read_custom() if x.id != e.id] + [e])
+    return e
+
+
+def remove_custom_model(model_id: str) -> bool:
+    with _lock:
+        custom = _read_custom()
+        keep = [x for x in custom if x.id != model_id]
+        if len(keep) == len(custom):
+            return False
+        _write_custom(keep)
+        return True
+
+
+def _with_custom(models: List[ModelEntry]) -> List[ModelEntry]:
+    custom = _read_custom()
+    ids = {c.id for c in custom}
+    return [m for m in models if m.id not in ids] + custom
 
 
 def get_models(force: bool = False) -> List[ModelEntry]:
     global _mem_cache
     with _lock:
         if not force and _mem_cache and time.time() - _mem_cache[0] < CACHE_TTL:
-            return _mem_cache[1]
+            return _with_custom(_mem_cache[1])
 
         if not force and CACHE_FILE.exists():
             try:
@@ -355,7 +516,7 @@ def get_models(force: bool = False) -> List[ModelEntry]:
                 if time.time() - raw.get("ts", 0) < CACHE_TTL and raw.get("models"):
                     entries = [ModelEntry(**m) for m in raw["models"]]
                     _mem_cache = (raw["ts"], entries)
-                    return entries
+                    return _with_custom(entries)
             except Exception as e:
                 logger.warning(f"Cache read failed: {e}")
 
@@ -372,13 +533,11 @@ def get_models(force: bool = False) -> List[ModelEntry]:
                 raw = json.loads(CACHE_FILE.read_text(encoding="utf-8"))
                 models = [ModelEntry(**m) for m in raw["models"]]
                 logger.info("Using stale model cache (offline)")
-                _mem_cache = (time.time() - CACHE_TTL + 600, models)  # retry in 10 min
-                return models
             except Exception:
                 logger.info("Using offline fallback model dataset")
                 models = _fallback()
-                _mem_cache = (time.time() - CACHE_TTL + 600, models)
-                return models
+            _mem_cache = (time.time() - CACHE_TTL + 600, models)  # retry in 10 min
+            return _with_custom(models)
 
         ts = time.time()
         try:
@@ -390,11 +549,14 @@ def get_models(force: bool = False) -> List[ModelEntry]:
         except Exception as e:
             logger.warning(f"Cache write failed: {e}")
         _mem_cache = (ts, models)
-        return models
+        return _with_custom(models)
 
 
 def find_model(model_id: str) -> Optional[ModelEntry]:
-    return next((m for m in get_models() if m.id == model_id), None)
+    for m in get_models():
+        if m.id == model_id or model_id in m.sources:
+            return m
+    return None
 
 
 # ─── Real file listing (for downloads) ─────────────────────────────────────────
@@ -410,10 +572,11 @@ def repo_tree(model_id: str) -> List[Dict[str, Any]]:
     hit = _tree_cache.get(model_id)
     if hit and time.time() - hit[0] < _TREE_TTL:
         return hit[1]
-    with httpx.Client(timeout=HF_TIMEOUT, follow_redirects=True) as c:
+    with httpx.Client(timeout=HF_TIMEOUT, follow_redirects=True, headers=hf_headers()) as c:
         r = c.get(f"{HF_API}/models/{model_id}/tree/main", params={"recursive": "true"})
         if r.status_code == 401 or r.status_code == 403:
-            raise PermissionError("This repository is gated or private on HuggingFace")
+            raise PermissionError("This repository is gated or private. Accept its license on "
+                                  "HuggingFace and add your access token in Settings.")
         if r.status_code == 404:
             raise FileNotFoundError("Repository not found on HuggingFace")
         r.raise_for_status()

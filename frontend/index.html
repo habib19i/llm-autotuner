@@ -462,6 +462,21 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
 .toast{background:var(--surface);border:1px solid var(--border-2);border-left:3px solid var(--text-3);color:var(--text);
   padding:10px 14px;border-radius:var(--radius-sm);box-shadow:var(--shadow);font-size:12.5px;line-height:1.45;animation:wz-enter .2s ease;white-space:pre-wrap;word-break:break-word}
 .toast.error{border-left-color:var(--red)}.toast.ok{border-left-color:var(--green)}
+.lock-badge,.cust-badge{font-size:9px;border:1px solid var(--border-2);color:var(--text-3);padding:1px 4px;border-radius:3px;vertical-align:middle;margin-left:5px}
+.rt-chip{cursor:pointer;color:var(--yellow)!important}
+.bench-src{font-size:10.5px;color:var(--text-3);padding:0 16px 4px;flex-shrink:0}
+.modal-box.wide{max-width:560px;max-height:88vh;overflow-y:auto}
+.set-section{border-top:1px solid var(--border);padding:14px 0 4px}
+.set-section:first-of-type{border-top:none;padding-top:4px}
+.set-title{font-size:11px;font-weight:600;color:var(--text-2);text-transform:uppercase;letter-spacing:.05em;font-family:var(--font-mono);margin-bottom:6px}
+.set-desc{font-size:12px;color:var(--text-3);line-height:1.5;margin-bottom:10px}
+.set-desc a{color:var(--text-2)}
+.set-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.set-row .hw-form-input{flex:1;min-width:180px}
+.set-val{font-family:var(--font-mono);font-size:12px;color:var(--text);word-break:break-all}
+.set-ok{color:var(--green);font-size:12px}
+.src-select{background:var(--surface-2);border:1px solid var(--border);color:var(--text);font-family:var(--font-mono);font-size:12px;padding:6px 8px;border-radius:var(--radius-sm);width:100%;margin-bottom:10px}
+.modal-meta{font-size:11.5px;color:var(--text-3);margin-bottom:10px;font-family:var(--font-mono)}
 @media(max-width:700px){.hw-chip,[data-pro-only]{display:none!important}.wz-center-panel{padding:32px 20px}}
 </style>
 </head>
@@ -494,7 +509,9 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
       <button class="lang-btn active" id="btn-lang-en">EN</button>
       <button class="lang-btn" id="btn-lang-zh">中文</button>
     </div>
-    <button class="icon-btn" id="btn-theme"><span id="theme-icon">☀️</span></button>
+    <span class="hw-chip rt-chip hidden" id="rt-chip" title="Open settings"></span>
+    <button class="icon-btn" id="btn-settings" title="Settings" aria-label="Settings">⚙</button>
+    <button class="icon-btn" id="btn-theme" aria-label="Toggle theme"><span id="theme-icon">☀️</span></button>
   </div>
 </header>
 
@@ -710,8 +727,8 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
         </div>
         <div class="cred-row">
           <span class="cred-label">API Key</span>
-          <code class="cred-value" id="cred-key">sk-local (any value works)</code>
-          <button class="cred-copy" data-copy="sk-local" data-i18n-copy="copy-btn">Copy</button>
+          <code class="cred-value" id="cred-key">—</code>
+          <button class="cred-copy" id="cred-key-copy" data-copy="" data-i18n-copy="copy-btn">Copy</button>
         </div>
       </div>
     </div>
@@ -743,7 +760,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
         <button class="chip" data-uc="Reasoning" data-i18n="chip-reasoning">Reasoning</button>
       </div>
     </div>
-    <div class="toolbar-right"><span class="model-count" id="model-count"></span><button class="icon-btn" id="btn-refresh" title="Re-fetch the model catalog from HuggingFace">↻ <span data-i18n="btn-refresh">Refresh</span></button></div>
+    <div class="toolbar-right"><span class="model-count" id="model-count"></span><button class="icon-btn" id="btn-add-model" title="Add any GGUF model from a HuggingFace link">＋ <span data-i18n="btn-add-model">Add model</span></button><button class="icon-btn" id="btn-refresh" title="Re-fetch the model catalog from HuggingFace">↻ <span data-i18n="btn-refresh">Refresh</span></button></div>
   </div>
   <div id="table-wrap">
     <table id="model-table">
@@ -791,12 +808,15 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
       <div class="stat-box"><span class="stat-label" data-i18n="stat-size">Size</span><span class="stat-val" id="d-size"></span></div>
     </div>
     <div class="bench-row">
+      <div class="bench-item"><span class="bench-label">Arena</span><span class="bench-val" id="b-elo"></span></div>
+      <div class="bench-item"><span class="bench-label">Arena · Coding</span><span class="bench-val" id="b-webdev"></span></div>
+      <div class="bench-item"><span class="bench-label">Arena · Vision</span><span class="bench-val" id="b-vision"></span></div>
       <div class="bench-item"><span class="bench-label">MMLU</span><span class="bench-val" id="b-mmlu"></span></div>
       <div class="bench-item"><span class="bench-label">HumanEval</span><span class="bench-val" id="b-humaneval"></span></div>
       <div class="bench-item"><span class="bench-label">SWE-bench</span><span class="bench-val" id="b-swe"></span></div>
       <div class="bench-item"><span class="bench-label">GPQA</span><span class="bench-val" id="b-gpqa"></span></div>
-      <div class="bench-item"><span class="bench-label">Arena ELO</span><span class="bench-val" id="b-elo"></span></div>
     </div>
+    <div class="bench-src" id="bench-src"></div>
     <div class="why-block">
       <span class="why-label" data-i18n="why-label">Recommendation rationale</span>
       <p class="why-text" id="detail-why" data-i18n="why-placeholder">Select a model to view configuration rationale.</p>
@@ -805,6 +825,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
       <button class="btn-primary" id="btn-download" disabled data-i18n="btn-download">Download</button>
       <button class="btn-secondary" id="btn-launch" disabled data-i18n="btn-launch">Launch</button>
       <button class="btn-danger hidden" id="btn-delete" data-i18n="btn-delete">Delete</button>
+      <button class="btn-secondary hidden" id="btn-remove-custom" data-i18n="btn-remove-custom">Remove from list</button>
       <a class="btn-ghost" id="btn-hf-link" href="#" target="_blank" rel="noopener" data-i18n="btn-hf">HuggingFace ↗</a>
     </div>
     <div class="progress-block hidden" id="progress-block">
@@ -887,11 +908,73 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
   </div>
 </div>
 
+<!-- Settings modal -->
+<div id="settings-modal" class="modal-overlay hidden">
+  <div class="modal-box wide">
+    <div class="modal-header"><span class="modal-title" data-i18n="set-title">Settings</span><button class="icon-btn" id="btn-close-settings">✕</button></div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-hf-title">HuggingFace token</div>
+      <p class="set-desc"><span data-i18n="set-hf-desc">Needed only for gated models (e.g. Llama, some Gemma repos): accept the model's license on HuggingFace, then paste a "Read" token from</span> <a href="https://huggingface.co/settings/tokens" target="_blank" rel="noopener">huggingface.co/settings/tokens</a>.</p>
+      <div class="set-row" id="hf-token-form">
+        <input class="hw-form-input" id="hf-token-input" type="password" autocomplete="off" spellcheck="false" placeholder="hf_…">
+        <button class="btn-primary" id="btn-save-token" data-i18n="set-save">Save</button>
+      </div>
+      <div class="set-row hidden" id="hf-token-set">
+        <span class="set-ok" id="hf-token-status"></span>
+        <button class="btn-secondary" id="btn-clear-token" data-i18n="set-remove">Remove</button>
+      </div>
+    </div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-key-title">Model API key</div>
+      <p class="set-desc" data-i18n="set-key-desc">Running models require this key, so other websites open in your browser can't use them. Paste it into VS Code, Cursor, Open WebUI — and into the chat page's settings if it asks.</p>
+      <div class="set-row"><code class="set-val" id="set-api-key">—</code></div>
+      <div class="set-row">
+        <button class="btn-secondary" id="btn-copy-key" data-copy="" data-i18n-copy="copy-btn">Copy</button>
+        <button class="btn-secondary" id="btn-regen-key" data-i18n="set-regen">Generate new key</button>
+      </div>
+    </div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-rt-title">llama.cpp runtime</div>
+      <p class="set-desc" id="set-rt-desc"></p>
+      <div class="set-row" id="set-rt-actions"></div>
+      <div class="wz-dl-track hidden" id="set-rt-track"><div class="wz-dl-fill" id="set-rt-fill"></div></div>
+    </div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-disk-title">Storage</div>
+      <p class="set-desc" id="set-disk"></p>
+    </div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-bench-title">Quality data</div>
+      <p class="set-desc" id="set-bench"></p>
+    </div>
+  </div>
+</div>
+
+<!-- Add model modal -->
+<div id="add-modal" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-header"><span class="modal-title" data-i18n="add-title">Add a model from HuggingFace</span><button class="icon-btn" id="btn-close-add">✕</button></div>
+    <p class="modal-desc" data-i18n="add-desc">Paste the link of any HuggingFace repository that contains .gguf files.</p>
+    <div class="set-row">
+      <input class="hw-form-input" id="add-input" autocomplete="off" spellcheck="false" placeholder="https://huggingface.co/owner/model-GGUF">
+      <button class="btn-primary" id="btn-add-confirm" data-i18n="add-btn">Add</button>
+    </div>
+    <p class="modal-note" id="add-status"></p>
+  </div>
+</div>
+
 <!-- Quant picker modal -->
 <div id="quant-modal" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="modal-header"><span class="modal-title" data-i18n="modal-title">Select quantization</span><button class="icon-btn" id="btn-close-modal">✕</button></div>
     <p class="modal-desc" id="modal-model-name"></p>
+    <select class="src-select hidden" id="src-select" aria-label="Download source"></select>
+    <div class="modal-meta" id="modal-disk"></div>
     <div class="quant-list" id="quant-list"></div>
     <p class="modal-note" data-i18n="modal-note">Sizes are the exact files on HuggingFace. Q4_K_M offers the best quality-to-size ratio for most hardware.</p>
   </div>
@@ -1002,7 +1085,34 @@ const STRINGS = {
     'dl-started':'Downloading {name} ({quant})…',
     'dl-files':'file {i} of {n}',
     'remaining':'{t} left',
-  },
+    'btn-add-model':'Add model','btn-remove-custom':'Remove from list',
+    'set-title':'Settings','set-hf-title':'HuggingFace token',
+    'set-hf-desc':'Needed only for gated models (e.g. Llama, some Gemma repos): accept the model\'s license on HuggingFace, then paste a "Read" token from',
+    'set-save':'Save','set-remove':'Remove','set-key-title':'Model API key',
+    'set-key-desc':'Running models require this key, so other websites open in your browser can\'t use them. Paste it into VS Code, Cursor, Open WebUI — and into the chat page\'s settings if it asks.',
+    'set-regen':'Generate new key','set-rt-title':'llama.cpp runtime','set-disk-title':'Storage','set-bench-title':'Quality data',
+    'add-title':'Add a model from HuggingFace','add-desc':'Paste the link of any HuggingFace repository that contains .gguf files.','add-btn':'Add',
+    'add-adding':'Checking the repository…','add-ok':'Added {name}.',
+    'hf-set':'Token saved{u}.','hf-saved':'HuggingFace token saved.','hf-removed':'HuggingFace token removed.',
+    'confirm-regen':'Generate a new API key? Apps configured with the old key will need the new one (a running model must be relaunched).',
+    'key-new':'New API key generated.',
+    'rt-desc-installed':'Installed: llama.cpp {v} ({variant}). Best build for this computer: {rec}.',
+    'rt-desc-path':'Using llama-server found on your PATH: {p}',
+    'rt-desc-missing':'Not installed yet. It is downloaded automatically the first time you launch a model ({rec}).',
+    'rt-latest':' Latest release: {l}.',
+    'rt-install':'Install now','rt-update':'Update to {l}','rt-faster':'Switch to faster build ({rec})',
+    'rt-vulkan':'Use Vulkan build instead','rt-stop-first':'The running model will be stopped first. Continue?',
+    'rt-chip-update':'llama.cpp update','rt-chip-faster':'Faster engine available',
+    'hint-vulkan':'Tip: if the CUDA build does not start on this PC, open Settings → "Use Vulkan build instead".',
+    'disk-desc':'Models folder: {path}\n{models} GB used by models · {free} GB free on this drive.',
+    'disk-free':'Free disk space: {free} GB','tag-nospace':'not enough disk',
+    'bench-desc':'Arena ratings come from LMArena\'s public leaderboard (open-weight models, published {d}), refreshed daily. Models not on the leaderboard get an estimate from their size and release date, marked with ~.',
+    'src-option':'{repo} (from {pub})',
+    'key-copied-chat':'API key copied — if the chat page asks for it, paste it in its Settings.',
+    'gated-title':'Gated: needs a HuggingFace token','custom-title':'Added by you',
+    'also-from':'also from {n} other source(s)',
+    'arena-est':'~{r} (estimated)',
+      },
   zh: {
     'mode-simple':'简单','mode-pro':'专业',
     'step-1':'扫描','step-2':'硬件','step-3':'工作流','step-4':'模型','step-5':'部署',
@@ -1092,7 +1202,34 @@ const STRINGS = {
     'dl-started':'正在下载 {name}（{quant}）…',
     'dl-files':'第 {i}/{n} 个文件',
     'remaining':'剩余 {t}',
-  }
+    'btn-add-model':'添加模型','btn-remove-custom':'从列表移除',
+    'set-title':'设置','set-hf-title':'HuggingFace 令牌',
+    'set-hf-desc':'仅受限模型需要（如 Llama、部分 Gemma 仓库）：先在 HuggingFace 上接受模型许可，然后粘贴一个 "Read" 令牌，获取地址',
+    'set-save':'保存','set-remove':'移除','set-key-title':'模型 API 密钥',
+    'set-key-desc':'运行中的模型需要此密钥，浏览器中打开的其他网站无法使用它。请将其粘贴到 VS Code、Cursor、Open WebUI，以及聊天页面要求时的设置中。',
+    'set-regen':'生成新密钥','set-rt-title':'llama.cpp 运行时','set-disk-title':'存储','set-bench-title':'质量数据',
+    'add-title':'从 HuggingFace 添加模型','add-desc':'粘贴任何包含 .gguf 文件的 HuggingFace 仓库链接。','add-btn':'添加',
+    'add-adding':'正在检查仓库…','add-ok':'已添加 {name}。',
+    'hf-set':'令牌已保存{u}。','hf-saved':'HuggingFace 令牌已保存。','hf-removed':'HuggingFace 令牌已移除。',
+    'confirm-regen':'生成新的 API 密钥？使用旧密钥配置的应用需要更新（运行中的模型需重新启动）。',
+    'key-new':'已生成新的 API 密钥。',
+    'rt-desc-installed':'已安装：llama.cpp {v}（{variant}）。本机最佳版本：{rec}。',
+    'rt-desc-path':'正在使用 PATH 中的 llama-server：{p}',
+    'rt-desc-missing':'尚未安装。首次启动模型时将自动下载（{rec}）。',
+    'rt-latest':' 最新版本：{l}。',
+    'rt-install':'立即安装','rt-update':'更新到 {l}','rt-faster':'切换到更快的版本（{rec}）',
+    'rt-vulkan':'改用 Vulkan 版本','rt-stop-first':'将先停止正在运行的模型。继续？',
+    'rt-chip-update':'llama.cpp 有更新','rt-chip-faster':'有更快的引擎',
+    'hint-vulkan':'提示：如果 CUDA 版本在此电脑上无法启动，请打开设置 →“改用 Vulkan 版本”。',
+    'disk-desc':'模型文件夹：{path}\n模型占用 {models} GB · 该磁盘剩余 {free} GB。',
+    'disk-free':'可用磁盘空间：{free} GB','tag-nospace':'磁盘空间不足',
+    'bench-desc':'Arena 评分来自 LMArena 公开排行榜（开放权重模型，发布于 {d}），每日更新。未上榜的模型根据规模和发布时间估算，以 ~ 标记。',
+    'src-option':'{repo}（来自 {pub}）',
+    'key-copied-chat':'已复制 API 密钥 — 如果聊天页面要求，请粘贴到其设置中。',
+    'gated-title':'受限：需要 HuggingFace 令牌','custom-title':'由您添加',
+    'also-from':'另有 {n} 个来源',
+    'arena-est':'~{r}（估算）',
+      }
 };
 
 /* ══════════════════════════════════════
@@ -1104,6 +1241,7 @@ let allModels = [];
 let installed = [];     // /api/installed
 let runtimeInfo = null; // /api/runtime
 let launchInfo = null;  // /api/launch-status
+let settingsInfo = null; // /api/settings
 
 const $ = id => document.getElementById(id);
 let currentMode='simple', currentTheme='dark', currentLang='en';
@@ -1161,13 +1299,21 @@ const API = {
   refresh:        ()           => post('/api/refresh'),
   recommend:      (id, p)      => post('/api/recommend', { model_id:id, persona:p, hardware: hwOverride || null }),
   hfFiles:        (id)         => req('/api/hf-files/' + id),
-  download:       (id, quant)  => post('/api/download', { model_id:id, quant }),
+  download:       (id, quant)  => post('/api/download', { model_id:id, quant }),  // id may be any source repo
   downloads:      ()           => req('/api/downloads'),
   cancel:         (key)        => req('/api/downloads/' + encodeURI(key), { method:'DELETE' }),
   installed:      ()           => req('/api/installed'),
   deleteModel:    (f)          => req('/api/installed/' + encodeURI(f), { method:'DELETE' }),
   runtime:        ()           => req('/api/runtime'),
-  installRuntime: ()           => post('/api/runtime/install'),
+  installRuntime: (variant)    => post('/api/runtime/install', variant ? { variant } : undefined),
+  settings:       ()           => req('/api/settings'),
+  setToken:       (token)      => post('/api/settings/hf-token', { token }),
+  clearToken:     ()           => req('/api/settings/hf-token', { method:'DELETE' }),
+  regenKey:       ()           => post('/api/settings/api-key/regenerate'),
+  disk:           ()           => req('/api/disk'),
+  benchInfo:      ()           => req('/api/benchmarks/info'),
+  addCustom:      (url)        => post('/api/models/custom', { url }),
+  removeCustom:   (id)         => req('/api/models/custom/' + encodeURI(id), { method:'DELETE' }),
   launch:         (p)          => post('/api/launch', p),
   stop:           ()           => post('/api/stop'),
   launchStat:     ()           => req('/api/launch-status'),
@@ -1177,7 +1323,9 @@ const loadModels = () => (hwOverride ? API.modelsOverride(hwOverride) : API.mode
 const refreshInstalled = () => API.installed().then(list => { installed = list; return list; }).catch(() => installed);
 
 function installedFor(modelId, quant) {
-  const list = installed.filter(x => x.model_id === modelId && x.complete);
+  const m = allModels.find(x => x.id === modelId);
+  const ids = m ? m.sources : [modelId];
+  const list = installed.filter(x => ids.includes(x.model_id) && x.complete);
   if (!list.length) return null;
   return (quant && list.find(x => x.quant === quant)) || list[0];
 }
@@ -1273,6 +1421,38 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-change-workflow').addEventListener('click', e => { e.preventDefault(); goWizardStep(3); });
   $('btn-stop').addEventListener('click', stopModel);
   $('btn-refresh').addEventListener('click', refreshCatalog);
+  $('btn-settings').addEventListener('click', openSettings);
+  $('rt-chip').addEventListener('click', openSettings);
+  $('btn-close-settings').addEventListener('click', () => $('settings-modal').classList.add('hidden'));
+  $('settings-modal').addEventListener('click', e => { if (e.target===$('settings-modal')) $('settings-modal').classList.add('hidden'); });
+  $('btn-save-token').addEventListener('click', saveToken);
+  $('hf-token-input').addEventListener('keydown', e => { if (e.key==='Enter') saveToken(); });
+  $('btn-clear-token').addEventListener('click', async () => {
+    try { settingsInfo = await API.clearToken(); renderSettings(); toast(t('hf-removed')); } catch(e) { toast(e.message,'error'); }
+  });
+  $('btn-regen-key').addEventListener('click', async () => {
+    if (!confirm(t('confirm-regen'))) return;
+    try { settingsInfo = await API.regenKey(); renderSettings(); renderDoneStep(); toast(t('key-new'), 'ok'); } catch(e) { toast(e.message,'error'); }
+  });
+  $('btn-add-model').addEventListener('click', () => {
+    $('add-status').textContent = ''; $('add-input').value = '';
+    $('add-modal').classList.remove('hidden'); $('add-input').focus();
+  });
+  $('btn-close-add').addEventListener('click', () => $('add-modal').classList.add('hidden'));
+  $('add-modal').addEventListener('click', e => { if (e.target===$('add-modal')) $('add-modal').classList.add('hidden'); });
+  $('btn-add-confirm').addEventListener('click', addCustomModel);
+  $('add-input').addEventListener('keydown', e => { if (e.key==='Enter') addCustomModel(); });
+  $('btn-remove-custom').addEventListener('click', removeCustomModel);
+  $('lbar-open').addEventListener('click', () => {
+    const key = settingsInfo && settingsInfo.api_key;
+    if (key && navigator.clipboard) navigator.clipboard.writeText(key).then(() => toast(t('key-copied-chat'), '', 8000)).catch(()=>{});
+  });
+  $('src-select').addEventListener('change', () => { if (selectedId) loadQuantList(selectedId, $('src-select').value); });
+  API.settings().then(st => { settingsInfo = st; }).catch(()=>{});
+  const checkRuntime = () => API.runtime().then(r => { runtimeInfo = r; renderRtChip(); }).catch(()=>{});
+  checkRuntime();
+  setTimeout(checkRuntime, 5000);      // the release check finishes in the background
+  setInterval(checkRuntime, 60000);
 
   // Hardware override modal
   const CPU_MODELS = {
@@ -1310,7 +1490,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('hw-override-modal').addEventListener('click', e => { if(e.target===$('hw-override-modal')) $('hw-override-modal').classList.add('hidden'); });
   $('quant-modal').addEventListener('click', e => { if(e.target===$('quant-modal')) $('quant-modal').classList.add('hidden'); });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { $('hw-override-modal').classList.add('hidden'); $('quant-modal').classList.add('hidden'); }
+    if (e.key === 'Escape') ['hw-override-modal','quant-modal','settings-modal','add-modal'].forEach(id => $(id).classList.add('hidden'));
   });
   $('btn-save-hw').addEventListener('click', saveHwOverride);
 
@@ -1481,12 +1661,12 @@ function renderRecs() {
     story: m=>m.ctx_k>=64 && !m.is_coding,
     instruction: m=>!m.is_coding,
   }[wizardPersona]||(()=>true);
-  const rank = {
-    coding: m=>m.swe_bench*0.55+m.humaneval*0.45,
-    stem: m=>m.gpqa*0.6+m.mmlu*0.4,
-    instruction: m=>m.ifeval,
-    vision: m=>m.mmlu,
-  }[wizardPersona] || (m=>m.score);
+  const bonus = {
+    coding: m=>(m.is_coding?6:0) + (m.arena_coding?3:0),
+    stem: m=>m.is_reasoning?6:0,
+    vision: m=>m.arena_vision?3:0,
+  }[wizardPersona] || (()=>0);
+  const rank = m => m.score + bonus(m) + (m.bench_estimated ? 0 : 2);  // measured beats estimated on ties
   const sub = {
     coding:{en:'Ranked for code generation on your hardware',zh:'针对您硬件上代码生成的推荐'},
     general:{en:'Ranked for general instruction following',zh:'针对通用指令遵循的推荐'},
@@ -1564,8 +1744,8 @@ function renderRecs() {
 /* ══════════════════════════════════════
    DOWNLOADS
 ══════════════════════════════════════ */
-async function beginDownload(m, quant, origin) {
-  const job = await API.download(m.id, quant);
+async function beginDownload(m, quant, origin, repoId) {
+  const job = await API.download(repoId || m.id, quant);
   Object.assign(DL, { key: job.key, modelId: m.id, modelName: m.name, quant: job.quant,
                       filename: job.filename, status: 'downloading', origin });
   showDownloadInBar(job);
@@ -1726,6 +1906,10 @@ async function startModel(m, filename, onProgress) {
 function renderDoneStep() {
   setVal('done-model-name', t('done-downloaded', { name: PICK.modelName }));
   setVal('cred-model', PICK.filename.split('/').pop() || '—');
+  if (settingsInfo) {
+    setVal('cred-key', settingsInfo.api_key || 'not required');
+    $('cred-key-copy').dataset.copy = settingsInfo.api_key || '';
+  }
   $('cred-model-copy').dataset.copy = PICK.filename.split('/').pop() || '';
   renderRuntimeBox(runtimeInfo);
   const st = $('launch-state');
@@ -1752,7 +1936,7 @@ async function wizardLaunch() {
     renderDoneStep();
   } catch(e) {
     st.className = 'launch-state err';
-    st.textContent = t('err-launch', { e: e.message });
+    st.textContent = t('err-launch', { e: e.message }) + cudaHint();
   } finally {
     btn.disabled = false;
   }
@@ -1772,7 +1956,7 @@ async function proLaunch(id) {
       $('lbar-pid').textContent = '';
     });
   } catch(e) {
-    toast(t('err-launch', { e: e.message }), 'error', 12000);
+    toast(t('err-launch', { e: e.message }) + cudaHint(), 'error', 15000);
     if (!(launchInfo && launchInfo.running)) $('launch-bar').classList.add('hidden');
   } finally {
     $('btn-launch').disabled = false;
@@ -1823,7 +2007,12 @@ async function pollStatus() {
     if (wasRunning && !st.running && st.message && st.message !== 'No model running.') toast(st.message, 'error', 10000);
     renderLaunchBar(launchInfo);
     if (wizardStep === 6) renderDoneStep();
-    if (runtimeInfo && runtimeInfo.installing) { runtimeInfo = await API.runtime(); if (wizardStep===6) renderRuntimeBox(runtimeInfo); }
+    if (runtimeInfo && runtimeInfo.installing) {
+      runtimeInfo = await API.runtime();
+      if (wizardStep===6) renderRuntimeBox(runtimeInfo);
+      if (!$('settings-modal').classList.contains('hidden')) renderSettingsRuntime();
+      renderRtChip();
+    }
   } catch(e) { /* backend unreachable — skip this tick */ }
   finally { polling = false; }
 }
@@ -1910,7 +2099,9 @@ function renderTable() {
     const tr=document.createElement('tr');
     if(m.id===selectedId) tr.classList.add('selected');
     const moe=m.is_moe?'<span class="moe-badge">MoE</span>':'';
-    const inst=installedFor(m.id)?'<span class="inst-badge" title="Downloaded">✓</span>':'';
+    const inst=(installedFor(m.id)?'<span class="inst-badge" title="Downloaded">✓</span>':'')
+      + (m.gated?`<span class="lock-badge" title="${esc(t('gated-title'))}">🔒</span>`:'')
+      + (m.custom?`<span class="cust-badge" title="${esc(t('custom-title'))}">+</span>`:'');
     const fCls=m.fit.replace(' ','-'), mCls=m.mode.replace('+','-').replace(' ','-');
     const memCls=m.mem_pct<=60?'mem-perfect':m.mem_pct<=80?'mem-good':m.mem_pct<=100?'mem-tight':'mem-over';
     const memDisp=m.mem_pct>200?'>200%':m.mem_pct+'%';
@@ -1957,18 +2148,22 @@ function openDetail(id){
   $('detail-panel').classList.remove('hidden');
   $('table-wrap').classList.add('detail-open');
   $('detail-name').textContent=m.name;
-  $('detail-meta').textContent=`${m.provider} · ${m.params_label} · ${m.family} · ctx ${m.ctx_label} · ${m.id}`;
+  const alt = m.sources.length > 1 ? ' · ' + t('also-from', { n: m.sources.length - 1 }) : '';
+  $('detail-meta').textContent=`${m.provider} · ${m.params_label} · ${m.family} · ctx ${m.ctx_label} · ${m.id}${alt}`;
   const r = (detailRec && detailRec.row.id===id) ? detailRec.row : m;
   fillDetailStats(r);
-  const e = m.bench_estimated ? '~' : '';
-  $('b-mmlu').textContent=e+m.mmlu+'%'; $('b-humaneval').textContent=e+m.humaneval+'%';
-  $('b-swe').textContent=e+m.swe_bench+'%'; $('b-gpqa').textContent=e+m.gpqa+'%'; $('b-elo').textContent=e+m.arena_elo;
+  const v = x => x==null ? '—' : x + '%';
+  $('b-elo').textContent = m.arena_elo ? m.arena_elo : t('arena-est', { r: m.rating });
+  $('b-webdev').textContent = m.arena_coding || '—';
+  $('b-vision').textContent = m.arena_vision || '—';
+  $('b-mmlu').textContent=v(m.mmlu); $('b-humaneval').textContent=v(m.humaneval);
+  $('b-swe').textContent=v(m.swe_bench); $('b-gpqa').textContent=v(m.gpqa);
+  $('bench-src').textContent = m.bench_source || '';
   const hw=hwOverride||hwData;
   if (detailRec && detailRec.row.id===id) {
-    $('detail-why').textContent = detailRec.why + (m.bench_estimated ? ' ' + t('est-note') : '');
+    $('detail-why').textContent = detailRec.why;
   } else {
-    $('detail-why').textContent=t('why-tpl', { name:m.name, quant:m.quant, gpu:hw?hw.gpu.name:'GPU', mem:m.mem_pct, toks:m.tok_s })
-      + (m.bench_estimated ? ' ' + t('est-note') : '');
+    $('detail-why').textContent=t('why-tpl', { name:m.name, quant:m.quant, gpu:hw?hw.gpu.name:'GPU', mem:m.mem_pct, toks:m.tok_s });
   }
   $('btn-hf-link').href=m.hf_url;
   const inst = installedFor(m.id);
@@ -1976,6 +2171,7 @@ function openDetail(id){
   $('btn-launch').disabled=!inst;
   $('btn-launch').title = inst ? inst.filename : '';
   $('btn-delete').classList.toggle('hidden', !inst);
+  $('btn-remove-custom').classList.toggle('hidden', !m.custom);
   if (DL.status !== 'downloading' || DL.modelId !== id) $('progress-block').classList.add('hidden');
 }
 
@@ -2012,33 +2208,48 @@ async function proDelete(id) {
 async function openQuantModal(id) {
   const m = allModels.find(x => x.id === id);
   if (!m) return;
-  const recQuant = (detailRec && detailRec.row.id===id) ? detailRec.row.quant : m.quant;
   $('modal-model-name').textContent = m.name;
+  const sel = $('src-select');
+  sel.innerHTML = m.sources.map(r => `<option value="${esc(r)}">${esc(t('src-option', { repo: r, pub: r.split('/')[0] }))}</option>`).join('');
+  sel.classList.toggle('hidden', m.sources.length < 2);
+  $('quant-modal').classList.remove('hidden');
+  await loadQuantList(id, m.sources[0]);
+}
+
+async function loadQuantList(id, repo) {
+  const m = allModels.find(x => x.id === id);
+  if (!m) return;
+  const recQuant = (detailRec && detailRec.row.id===id) ? detailRec.row.quant : m.quant;
   const list = $('quant-list');
   list.innerHTML = `<div class="modal-note loading-text">${esc(t('modal-loading'))}</div>`;
-  $('quant-modal').classList.remove('hidden');
+  setVal('modal-disk', '');
 
-  let groups;
-  try { groups = await API.hfFiles(id); }
+  let groups, disk = null;
+  try { [groups, disk] = await Promise.all([API.hfFiles(repo), API.disk().catch(() => null)]); }
   catch(e) { list.innerHTML = `<div class="modal-note" style="color:var(--red)">${esc(e.message)}</div>`; return; }
+  if ($('src-select').value && $('src-select').value !== repo) return;  // user switched source meanwhile
+  if (disk) setVal('modal-disk', t('disk-free', { free: disk.free_gb }));
 
   const hw = hwOverride || hwData;
   const pool = hw ? (hw.gpu.integrated ? hw.available_ram_gb - 1.5 : hw.gpu.free_vram_gb + hw.available_ram_gb - 1.5) : Infinity;
+  const freeGb = disk ? disk.free_gb - 1 : Infinity;
   const busy = DL.status === 'downloading';
   list.innerHTML = groups.map(g => {
     const tooBig = g.size_gb * 1.1 + 0.5 > pool;
-    const have = installed.some(x => x.model_id === id && x.quant === g.quant && x.complete);
+    const noSpace = g.size_gb > freeGb;
+    const have = installed.some(x => x.model_id === repo && x.quant === g.quant && x.complete);
     const tags = [
       g.quant === recQuant ? `<span class="qi-tag rec">${esc(t('tag-rec'))}</span>` : '',
       have ? `<span class="qi-tag inst">${esc(t('tag-inst'))}</span>` : '',
       tooBig ? `<span class="qi-tag big">${esc(t('tag-big'))}</span>` : '',
+      noSpace ? `<span class="qi-tag big">${esc(t('tag-nospace'))}</span>` : '',
       g.shards > 1 ? `<span class="qi-tag">${esc(t('tag-shards', { n: g.shards }))}</span>` : '',
     ].join('');
     return `<div class="quant-item">
       <div class="qi-left"><span class="qi-name">${esc(g.quant)}</span>
         <span class="qi-quality">quality ~${g.quality}%</span><div class="qi-tags">${tags}</div></div>
       <div class="qi-right"><span class="qi-size">${g.size_gb} GB</span>
-        <button class="qi-dl-btn" data-quant="${esc(g.quant)}" ${have||busy?'disabled':''}>${esc(t('btn-download'))}</button></div>
+        <button class="qi-dl-btn" data-quant="${esc(g.quant)}" ${have||busy||noSpace?'disabled':''}>${esc(t('btn-download'))}</button></div>
     </div>`;
   }).join('') || `<div class="modal-note">No GGUF files found.</div>`;
 
@@ -2048,7 +2259,7 @@ async function openQuantModal(id) {
   list.querySelectorAll('.qi-dl-btn').forEach(btn => btn.addEventListener('click', async () => {
     btn.disabled = true;
     try {
-      await beginDownload(m, btn.dataset.quant, 'pro');
+      await beginDownload(m, btn.dataset.quant, 'pro', repo);
       $('quant-modal').classList.add('hidden');
       toast(t('dl-started', { name: m.name, quant: btn.dataset.quant }));
       if (selectedId === id) {
@@ -2059,10 +2270,141 @@ async function openQuantModal(id) {
       }
     } catch(e) {
       btn.disabled = false;
-      toast(t('err-download', { e: e.message }), 'error', 8000);
+      toast(t('err-download', { e: e.message }), 'error', 10000);
     }
   }));
 }
+
+/* ══════════════════════════════════════
+   SETTINGS
+══════════════════════════════════════ */
+function cudaHint() {
+  return runtimeInfo && /cuda/.test(runtimeInfo.variant || '') ? '\n\n' + t('hint-vulkan') : '';
+}
+
+function renderRtChip() {
+  const chip = $('rt-chip'), r = runtimeInfo;
+  const show = r && r.installed && !r.installing && (r.update_available || r.better_build);
+  chip.classList.toggle('hidden', !show);
+  if (show) chip.textContent = r.better_build ? t('rt-chip-faster') : t('rt-chip-update');
+}
+
+async function openSettings() {
+  $('settings-modal').classList.remove('hidden');
+  try {
+    const [st, rt, bi] = await Promise.all([API.settings(), API.runtime(), API.benchInfo().catch(() => null)]);
+    settingsInfo = st; runtimeInfo = rt;
+    renderSettings(bi);
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function renderSettings(benchInfo) {
+  const st = settingsInfo;
+  if (!st) return;
+  $('hf-token-form').classList.toggle('hidden', st.hf_token_set);
+  $('hf-token-set').classList.toggle('hidden', !st.hf_token_set);
+  setVal('hf-token-status', t('hf-set', { u: st.hf_user ? ' — ' + st.hf_user : '' }));
+  setVal('set-api-key', st.api_key || 'not required');
+  $('btn-copy-key').dataset.copy = st.api_key || '';
+  const d = st.disk;
+  setVal('set-disk', t('disk-desc', { path: d.path, models: d.models_gb, free: d.free_gb }));
+  if (benchInfo) setVal('set-bench', t('bench-desc', { d: benchInfo.published || '—' }));
+  renderSettingsRuntime();
+}
+
+function renderSettingsRuntime() {
+  const r = runtimeInfo;
+  if (!r) return;
+  let desc;
+  if (r.source === 'path') desc = t('rt-desc-path', { p: r.path });
+  else if (r.installed) desc = t('rt-desc-installed', { v: r.version || '?', variant: r.variant || '?', rec: r.recommended });
+  else desc = t('rt-desc-missing', { rec: r.recommended });
+  if (r.latest_version) desc += t('rt-latest', { l: r.latest_version });
+  if (r.stage === 'failed' && r.error) desc += '\n' + t('rt-failed', { e: r.error });
+  setVal('set-rt-desc', desc);
+
+  const track = $('set-rt-track');
+  track.classList.toggle('hidden', !r.installing);
+  $('set-rt-fill').style.width = (r.pct || 0) + '%';
+
+  const acts = $('set-rt-actions');
+  acts.innerHTML = '';
+  if (r.installing) {
+    acts.innerHTML = `<span class="set-desc">${esc(r.stage === 'extracting' ? t('rt-extracting') : t('rt-installing', { pct: Math.floor(r.pct) }))}</span>`;
+    return;
+  }
+  const add = (label, variant, primary) => {
+    const b = document.createElement('button');
+    b.className = primary ? 'btn-primary' : 'btn-secondary';
+    b.textContent = label;
+    b.addEventListener('click', () => installRuntime(variant));
+    acts.appendChild(b);
+  };
+  if (!r.installed) add(t('rt-install'), null, true);
+  else if (r.source === 'bundled') {
+    if (r.better_build) add(t('rt-faster', { rec: r.recommended }), r.recommended, true);
+    else if (r.update_available) add(t('rt-update', { l: r.latest_version }), r.variant, true);
+    if (/cuda/.test(r.variant || '')) add(t('rt-vulkan'), r.variant.replace(/cuda-[\d.]+/, 'vulkan'), false);
+  }
+}
+
+async function installRuntime(variant) {
+  if (launchInfo && launchInfo.running) {
+    if (!confirm(t('rt-stop-first'))) return;
+    await stopModel();
+  }
+  try {
+    runtimeInfo = await API.installRuntime(variant);
+    renderSettingsRuntime();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+async function saveToken() {
+  const tok = $('hf-token-input').value.trim();
+  if (!tok) return;
+  $('btn-save-token').disabled = true;
+  try {
+    settingsInfo = await API.setToken(tok);
+    $('hf-token-input').value = '';
+    renderSettings();
+    toast(t('hf-saved'), 'ok');
+  } catch(e) { toast(e.message, 'error', 8000); }
+  finally { $('btn-save-token').disabled = false; }
+}
+
+/* ══════════════════════════════════════
+   CUSTOM MODELS
+══════════════════════════════════════ */
+async function addCustomModel() {
+  const url = $('add-input').value.trim();
+  if (!url) return;
+  const btn = $('btn-add-confirm');
+  btn.disabled = true;
+  $('add-status').style.color = '';
+  setVal('add-status', t('add-adding'));
+  try {
+    const res = await API.addCustom(url);
+    await loadModels();
+    buildProviderChips(); applyFilters();
+    $('add-modal').classList.add('hidden');
+    toast(t('add-ok', { name: res.name }), 'ok');
+    if (currentMode === 'pro') selectModel(res.id);
+  } catch(e) {
+    $('add-status').style.color = 'var(--red)';
+    setVal('add-status', e.message);
+  } finally { btn.disabled = false; }
+}
+
+async function removeCustomModel() {
+  if (!selectedId) return;
+  try {
+    await API.removeCustom(selectedId);
+    closeDetail();
+    await loadModels();
+    buildProviderChips(); applyFilters();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
 </script>
 </body>
 </html>
