@@ -38,9 +38,8 @@ Intel Macs and other systems: [run from source](#run-from-source).
    | API key  | shown in the app (⚙ Settings, and on the Deploy step) |
    | Model    | the `.gguf` file name shown in the app |
 
-   Or just chat inside the app: click **💬 Chat** in the bottom bar (or on the Deploy page).
-   Replies stream live, reasoning models show their thinking in a collapsible section, vision
-   models accept images (📎), and each answer shows its speed in tokens per second.
+   llama.cpp's own chat page is at `http://127.0.0.1:8080` ("Open chat ↗" in the app). It
+   copies the API key for you — paste it into the chat page's settings if it asks.
 
 Closing the app's window stops the app and the model server.
 
@@ -74,6 +73,7 @@ Silicon.
   ⚙ Settings.
 - MLX models are served on the same address (`http://127.0.0.1:8080/v1`) with the same API
   key, so apps connected to the GGUF version keep working.
+- MLX models have no built-in chat page; connect an app such as Open WebUI, or VS Code.
 - Already have `mlx-lm` installed? Set `AUTOTUNER_MLX_PYTHON` to that Python to use it.
 
 ### Data folders (created next to the app)
