@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -338,6 +338,67 @@ def api_stop():
 @app.get("/api/launch-status")
 def api_launch_status():
     return launch_status()
+
+
+# ─── Built-in chat ─────────────────────────────────────────────────────────────
+# The page talks to /api/chat; the app relays to the running model server with the API key,
+# so the key never has to live in the browser. Works the same for llama.cpp and MLX.
+
+_chat_transport: Optional[httpx.AsyncBaseTransport] = None  # tests inject a mock upstream
+
+
+class ChatMessage(BaseModel):
+    role: str = Field(..., pattern=r"^(system|user|assistant)$")
+    content: object  # text, or OpenAI-style parts [{type:text}, {type:image_url}]
+
+
+class ChatReq(BaseModel):
+    messages: list[ChatMessage] = Field(..., min_length=1, max_length=400)
+    max_tokens: Optional[int] = Field(None, ge=1, le=32768)
+    temperature: Optional[float] = Field(None, ge=0, le=2)
+
+
+@app.post("/api/chat")
+async def api_chat(req: ChatReq):
+    st = await asyncio.to_thread(launch_status)
+    if not st.running or not st.ready:
+        raise HTTPException(409, "No model is running yet. Launch a model first.")
+    body = {"model": st.model.split("/")[-1], "stream": True,
+            "messages": [m.model_dump() for m in req.messages]}
+    if req.max_tokens:
+        body["max_tokens"] = req.max_tokens
+    if req.temperature is not None:
+        body["temperature"] = req.temperature
+    key = llm_api_key()
+    client = httpx.AsyncClient(timeout=httpx.Timeout(15.0, read=None), transport=_chat_transport)
+    upstream = client.build_request("POST", st.base_url + "/chat/completions", json=body,
+                                    headers={"Authorization": f"Bearer {key}"} if key else {})
+    try:
+        resp = await client.send(upstream, stream=True)
+    except httpx.HTTPError as e:
+        await client.aclose()
+        raise HTTPException(502, f"The model server did not respond: {e}")
+    if resp.status_code != 200:
+        detail = (await resp.aread()).decode("utf-8", "replace")[:500]
+        await resp.aclose()
+        await client.aclose()
+        raise HTTPException(502, f"The model server returned {resp.status_code}: {detail}")
+
+    async def relay():
+        # If the browser stops reading (Stop button, closed tab), Starlette cancels this
+        # generator and closing the upstream response makes the model stop generating.
+        try:
+            if resp.is_stream_consumed:  # body already buffered by the transport
+                yield resp.content
+            else:
+                async for chunk in resp.aiter_raw():
+                    yield chunk
+        finally:
+            await resp.aclose()
+            await client.aclose()
+
+    return StreamingResponse(relay(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 # ─── Frontend ──────────────────────────────────────────────────────────────────
