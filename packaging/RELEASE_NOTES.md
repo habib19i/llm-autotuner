@@ -10,6 +10,7 @@ Intel Macs and other systems: see **Run from source** in the README.
 
 ## What's new
 
+- **Fixed in 2.3.1:** Pro mode now has a **Deploy →** button that opens the Deploy page (connection details, API key, launch) for the selected model, downloading it first if needed.
 - **MLX models on Apple Silicon Macs**: about 200 models from mlx-community (marked **MLX**), run with Apple's own MLX engine, which is often faster than GGUF on M-series chips. The app sets up the MLX engine by itself the first time you launch an MLX model (about 250 MB, one time); no Python or Homebrew needed.
 - MLX models use the same address and API key as GGUF models, so connected apps keep working.
 - **＋ Add model** also accepts links to MLX repositories.

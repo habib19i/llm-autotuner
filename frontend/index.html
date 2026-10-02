@@ -831,6 +831,7 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
     <div class="action-row">
       <button class="btn-primary" id="btn-download" disabled data-i18n="btn-download">Download</button>
       <button class="btn-secondary" id="btn-launch" disabled data-i18n="btn-launch">Launch</button>
+      <button class="btn-secondary" id="btn-deploy" disabled data-i18n="btn-deploy">Deploy →</button>
       <button class="btn-danger hidden" id="btn-delete" data-i18n="btn-delete">Delete</button>
       <button class="btn-secondary hidden" id="btn-remove-custom" data-i18n="btn-remove-custom">Remove from list</button>
       <a class="btn-ghost" id="btn-hf-link" href="#" target="_blank" rel="noopener" data-i18n="btn-hf">HuggingFace ↗</a>
@@ -1063,7 +1064,7 @@ const STRINGS = {
     'stat-fit':'Fit','stat-mode':'Mode','stat-quant':'Quant','stat-toks':'tok/s',
     'stat-mem':'Mem','stat-layers':'GPU Layers','stat-ctx':'Context','stat-size':'Size',
     'why-label':'Recommendation rationale','why-placeholder':'Select a model to view configuration rationale.',
-    'btn-download':'Download','btn-launch':'Launch','btn-hf':'HuggingFace ↗','btn-delete':'Delete',
+    'btn-download':'Download','btn-launch':'Launch','btn-deploy':'Deploy →','deploy-after-dl':'The Deploy page opens when the download finishes.','btn-hf':'HuggingFace ↗','btn-delete':'Delete',
     'btn-refresh':'Refresh','btn-open-chat':'Open chat ↗',
     'modal-title':'Select quantization',
     'modal-note':'Sizes are the exact files on HuggingFace. Q4_K_M offers the best quality-to-size ratio for most hardware.',
@@ -1190,7 +1191,7 @@ const STRINGS = {
     'stat-fit':'适配度','stat-mode':'运行模式','stat-quant':'量化','stat-toks':'tok/s',
     'stat-mem':'内存','stat-layers':'GPU 层数','stat-ctx':'上下文','stat-size':'大小',
     'why-label':'推荐依据','why-placeholder':'选择模型查看配置依据。',
-    'btn-download':'下载','btn-launch':'启动','btn-hf':'HuggingFace ↗','btn-delete':'删除',
+    'btn-download':'下载','btn-launch':'启动','btn-deploy':'部署 →','deploy-after-dl':'下载完成后将打开部署页面。','btn-hf':'HuggingFace ↗','btn-delete':'删除',
     'btn-refresh':'刷新','btn-open-chat':'打开聊天 ↗',
     'modal-title':'选择量化级别',
     'modal-note':'大小为 HuggingFace 上的实际文件大小。Q4_K_M 在质量与大小之间提供最佳平衡。',
@@ -1581,6 +1582,7 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-close-detail').addEventListener('click', closeDetail);
   $('btn-download').addEventListener('click', () => { if (selectedId) openQuantModal(selectedId); });
   $('btn-launch').addEventListener('click', () => { if (selectedId) proLaunch(selectedId); });
+  $('btn-deploy').addEventListener('click', () => { if (selectedId) proDeploy(selectedId); });
   $('btn-delete').addEventListener('click', () => { if (selectedId) proDelete(selectedId); });
   $('btn-close-modal').addEventListener('click', () => $('quant-modal').classList.add('hidden'));
 });
@@ -1876,6 +1878,8 @@ async function trackDownload() {
       $('dl-bar-fill').style.width = '100%';
       Object.assign(PICK, { modelId: DL.modelId, modelName: DL.modelName, filename: d.filename });
       setTimeout(() => { goWizardStep(6); renderDoneStep(); }, 600);
+    } else if (DL.origin === 'pro-deploy') {
+      openDeployPage(DL.modelId, DL.modelName, d.filename);
     }
     if (currentMode === 'pro') { renderTable(); if (selectedId) openDetail(selectedId); }
     setTimeout(() => {
@@ -1992,9 +1996,10 @@ function renderDoneStep() {
                                         + (launchInfo.backend === 'mlx' ? '\n' + t('mlx-no-chat') : '')
                                       : t('st-loading', { name: PICK.modelName });
   } else st.textContent = '';
-  if (launchInfo && launchInfo.base_url) {
-    setVal('cred-url', launchInfo.base_url);
-    $('cred-url-copy').dataset.copy = launchInfo.base_url;
+  const baseUrl = (launchInfo && launchInfo.base_url) || (settingsInfo && settingsInfo.llm_base_url);
+  if (baseUrl) {
+    setVal('cred-url', baseUrl);
+    $('cred-url-copy').dataset.copy = baseUrl;
   }
 }
 
@@ -2248,6 +2253,8 @@ function openDetail(id){
   const inst = installedFor(m.id);
   $('btn-download').disabled=false;
   $('btn-launch').disabled=!inst;
+  $('btn-deploy').disabled=false;
+  $('btn-deploy').title = inst ? '' : t('deploy-after-dl');
   $('btn-launch').title = inst ? inst.filename : '';
   $('btn-delete').classList.toggle('hidden', !inst);
   $('btn-remove-custom').classList.toggle('hidden', !m.custom);
@@ -2284,7 +2291,10 @@ async function proDelete(id) {
 /* ══════════════════════════════════════
    QUANT PICKER (real files from HF)
 ══════════════════════════════════════ */
-async function openQuantModal(id) {
+let deployAfterDownload = false;
+
+async function openQuantModal(id, forDeploy) {
+  deployAfterDownload = !!forDeploy;
   const m = allModels.find(x => x.id === id);
   if (!m) return;
   $('modal-model-name').textContent = m.name;
@@ -2338,7 +2348,7 @@ async function loadQuantList(id, repo) {
   list.querySelectorAll('.qi-dl-btn').forEach(btn => btn.addEventListener('click', async () => {
     btn.disabled = true;
     try {
-      await beginDownload(m, btn.dataset.quant, 'pro', btn.dataset.repo);
+      await beginDownload(m, btn.dataset.quant, deployAfterDownload ? 'pro-deploy' : 'pro', btn.dataset.repo);
       $('quant-modal').classList.add('hidden');
       toast(t('dl-started', { name: m.name, quant: btn.dataset.quant }));
       if (selectedId === id) {
@@ -2520,6 +2530,25 @@ async function removeCustomModel() {
     await loadModels();
     buildProviderChips(); applyFilters();
   } catch(e) { toast(e.message, 'error'); }
+}
+
+/* ══════════════════════════════════════
+   PRO → DEPLOY
+══════════════════════════════════════ */
+function openDeployPage(modelId, modelName, filename) {
+  Object.assign(PICK, { modelId, modelName, filename });
+  closeDetail();
+  setMode('simple');
+  goWizardStep(6);
+  renderDoneStep();
+}
+
+function proDeploy(id) {
+  const m = allModels.find(x => x.id === id);
+  if (!m) return;
+  const inst = installedFor(id, m.quant);
+  if (inst) openDeployPage(m.id, m.name, inst.filename);
+  else openQuantModal(id, true);  // download first; the Deploy page opens when it finishes
 }
 
 </script>
