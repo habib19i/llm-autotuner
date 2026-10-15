@@ -149,7 +149,8 @@ _NON_CHAT_ARCH = {"bert", "nomic-bert", "jina-bert-v2", "gemma-embedding", "flux
 
 _PROVIDERS: List[Tuple[str, str]] = [
     # Order matters: "DeepSeek-R1-Distill-Qwen" must resolve to DeepSeek, not Alibaba
-    ("deepseek", "DeepSeek"), ("kimi", "Moonshot AI"), ("nemotron", "NVIDIA"),
+    ("deepseek", "DeepSeek"), ("kimi", "Moonshot AI"), ("hermes", "Nous Research"),
+    ("nous", "Nous Research"), ("dolphin", "Cognitive Computations"), ("nemotron", "NVIDIA"),
     ("nvidia", "NVIDIA"), ("medgemma", "Google"), ("gemma", "Google"), ("gpt-oss", "OpenAI"),
     ("glm", "Z.ai"), ("minimax", "MiniMax"), ("devstral", "Mistral AI"),
     ("ministral", "Mistral AI"), ("magistral", "Mistral AI"), ("mistral", "Mistral AI"),
@@ -157,7 +158,9 @@ _PROVIDERS: List[Tuple[str, str]] = [
     ("smollm", "Hugging Face"), ("lfm", "Liquid AI"), ("granite", "IBM"), ("step", "StepFun"),
     ("ernie", "Baidu"), ("hunyuan", "Tencent"), ("olmo", "Ai2"), ("cohere", "Cohere"),
     ("command", "Cohere"), ("north", "Cohere"), ("starcoder", "BigCode"), ("falcon", "TII"),
-    ("seed", "ByteDance"),
+    ("seed", "ByteDance"), ("exaone", "LG AI Research"), ("internlm", "Shanghai AI Lab"),
+    ("intern", "Shanghai AI Lab"), ("aya", "Cohere"), ("jamba", "AI21 Labs"), ("arcee", "Arcee AI"),
+    ("apriel", "ServiceNow"), ("ling-", "inclusionAI"), ("ring-", "inclusionAI"), ("kanana", "Kakao"),
 ]
 
 
@@ -223,7 +226,7 @@ def _display_stem(rid: str, base_model: str = "") -> str:
     """Human name stem: the repo name without -GGUF and without bartowski's 'Org_' prefix
     ('bartowski/Qwen_Qwen3-8B-GGUF' -> 'Qwen3-8B'). The base model only breaks ties when the
     repo name is not descriptive."""
-    stem = re.sub(r"-GGUF$", "", rid.split("/")[-1], flags=re.I)
+    stem = re.sub(r"(?:-i1)?-GGUF$", "", rid.split("/")[-1], flags=re.I)  # mradermacher: -i1-GGUF
     stem = _ORG_PREFIX.sub("", stem)
     if base_model and len(stem) < 3:
         return base_model.split("/")[-1]
@@ -407,7 +410,7 @@ def _mlx_files_ok(files: List[str]) -> bool:
 
 
 def _fetch_mlx(c: httpx.Client, context_by_base: Dict[str, int]) -> List[ModelEntry]:
-    params = [("author", "mlx-community"), ("limit", "300"), ("sort", "downloads"),
+    params = [("author", "mlx-community"), ("limit", "400"), ("sort", "downloads"),
               ("pipeline_tag", "text-generation")]
     params += [("expand[]", x) for x in ("siblings", "downloads", "likes", "lastModified", "tags",
                                          "safetensors", "config", "gated")]
@@ -546,10 +549,19 @@ _mem_cache: Optional[Tuple[float, List[ModelEntry]]] = None
 # GGUF publishers, in order of preference when several host the same base model
 SOURCES: List[Tuple[str, int, int]] = [
     # (author, how many repos to scan, minimum downloads)
-    ("unsloth", 200, 0),
-    ("bartowski", 150, 3000),
-    ("lmstudio-community", 100, 3000),
-    ("ggml-org", 60, 1000),
+    ("unsloth", 300, 0),
+    ("bartowski", 250, 2000),
+    ("lmstudio-community", 150, 2000),
+    ("ggml-org", 100, 500),
+    # The labs' own GGUF releases
+    ("Qwen", 60, 500),
+    ("google", 40, 500),
+    ("ibm-granite", 40, 300),
+    ("microsoft", 30, 500),
+    ("NousResearch", 30, 1000),
+    # Large community quantizers: fine-tunes and models nobody else converts
+    ("mradermacher", 200, 8000),
+    ("MaziyarPanahi", 80, 5000),
 ]
 _EXPAND = ("gguf", "siblings", "downloads", "likes", "lastModified", "pipeline_tag", "tags", "gated")
 
@@ -585,6 +597,63 @@ def _fetch_hf() -> List[ModelEntry]:
         logger.warning(f"MLX catalog fetch failed: {e}")
         mlx = []
     return gguf + mlx
+
+
+# ─── Search all of HuggingFace ─────────────────────────────────────────────────
+
+def _hf_search_raw(params: List[Tuple[str, str]]) -> List[Dict]:
+    with httpx.Client(timeout=HF_TIMEOUT, follow_redirects=True, headers=hf_headers()) as c:
+        r = c.get(f"{HF_API}/models", params=params)
+        r.raise_for_status()
+        return r.json()
+
+
+def search_hf(query: str, include_mlx: bool = False, limit: int = 30) -> List[Dict[str, Any]]:
+    """Models on HuggingFace that llama.cpp (or MLX) can run, best known first. Each result
+    says whether it is already in the catalog; others can be added with add_custom_model."""
+    q = (query or "").strip()
+    if len(q) < 2:
+        return []
+    libs = ["gguf"] + (["mlx"] if include_mlx else [])
+    items: List[Dict] = []
+    for lib in libs:
+        params = [("search", q), ("filter", lib), ("sort", "downloads"), ("limit", str(limit))]
+        params += [("expand[]", x) for x in ("gguf", "downloads", "likes", "lastModified", "pipeline_tag",
+                                             "tags", "gated", "safetensors")]
+        items += [dict(i, _lib=lib) for i in _hf_search_raw(params)]
+    known = {}
+    for m in get_models():
+        for src in m.sources:
+            known[src.lower()] = m.id
+    out = []
+    seen = set()
+    for it in sorted(items, key=lambda i: -(i.get("downloads") or 0)):
+        rid = it.get("id", "")
+        if not REPO_ID_RE.match(rid) or it.get("pipeline_tag") in _NON_CHAT_PIPELINES:
+            continue
+        if rid.lower() in seen:  # a repo can match both the gguf and the mlx filter
+            continue
+        seen.add(rid.lower())
+        name = rid.split("/")[-1]
+        if _NON_CHAT_NAME.search(name):
+            continue
+        fmt = it["_lib"]
+        if fmt == "gguf":
+            total = (it.get("gguf") or {}).get("total")
+            stem = _display_stem(rid, _base_model_of(it))
+        else:
+            total = (it.get("safetensors") or {}).get("total")
+            stem = mlx_quant_label(name)[0]
+        params_b = total / 1e9 if total else (_params_from_name(stem) or 0)
+        out.append({
+            "id": rid, "name": stem.replace("-", " ").replace("_", " "), "publisher": rid.split("/")[0],
+            "provider": _derive_provider(_base_model_of(it) or stem), "params_b": round(params_b, 2),
+            "context_k": round(((it.get("gguf") or {}).get("context_length") or 0) / 1024) or None,
+            "downloads": it.get("downloads") or 0, "likes": it.get("likes") or 0,
+            "updated": (it.get("lastModified") or "")[:10], "format": fmt, "gated": bool(it.get("gated")),
+            "in_catalog": known.get(rid.lower(), ""),
+        })
+    return out[:limit]
 
 
 # ─── User-added models (paste a HuggingFace link) ──────────────────────────────

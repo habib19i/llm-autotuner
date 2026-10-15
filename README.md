@@ -1,6 +1,6 @@
 # LLM Autotuner
 
-Hardware-aware local LLM deployment. It scans your computer, ranks ~290 current GGUF models
+Hardware-aware local LLM deployment. It scans your computer, ranks hundreds of current GGUF models
 (plus ~200 MLX models on Apple Silicon Macs) from HuggingFace by how well they fit **your**
 memory, downloads the right quantization,
 installs the llama.cpp runtime, and starts an OpenAI-compatible API server — all from a
@@ -35,7 +35,7 @@ Intel Macs and other systems: [run from source](#run-from-source).
    | Setting  | Value |
    |----------|-------|
    | Base URL | `http://127.0.0.1:8080/v1` |
-   | API key  | shown in the app (⚙ Settings, and on the Deploy step) |
+   | API key  | shown in the app (Settings, and on the Deploy step) |
    | Model    | the `.gguf` file name shown in the app |
 
    llama.cpp's own chat page is at `http://127.0.0.1:8080` ("Open chat ↗" in the app). It
@@ -43,10 +43,25 @@ Intel Macs and other systems: [run from source](#run-from-source).
 
 Closing the app's window stops the app and the model server.
 
-### Settings (⚙)
+### Code with OpenCode
+
+[OpenCode](https://opencode.ai) is an open-source coding agent for the terminal. On the Deploy
+page, **Set up OpenCode** adds the model to OpenCode's settings
+(`~/.config/opencode/opencode.json`; your other settings are kept and the previous file is saved
+as `opencode.json.bak`) as the provider `llm-autotuner`, and can make it the default model. Then
+launch the model and click **Open OpenCode** to start it on a project folder in a new terminal.
+
+- OpenCode sends about 10k tokens of instructions with every request. When a model still fits
+  with a 32k or 64k context, the Deploy page offers to launch it with that context.
+- Not installed yet? The Deploy page shows the install commands (`npm install -g opencode-ai`,
+  or `curl -fsSL https://opencode.ai/install | bash` on macOS and Linux).
+- Generating a new API key updates OpenCode's settings automatically.
+
+### Settings
 
 - **HuggingFace token** — only needed for gated models (e.g. Llama). Accept the model's
   license on HuggingFace, create a *Read* token at huggingface.co/settings/tokens, paste it.
+- **Appearance** — light, dark, or follow the system.
 - **Model API key** — required by the running model so other websites open in your browser
   can't use it. Copy it or generate a new one.
 - **llama.cpp runtime** — current version and build, one-click updates, and a switch to the
@@ -64,10 +79,14 @@ the page shows how much disk space models use and how much is free.
 
 ### More models
 
-- The catalog combines **Unsloth, bartowski, LM Studio Community and ggml-org**. When several
-  publish the same model, the download dialog lets you pick the source.
-- **＋ Add model** (Pro mode) accepts any HuggingFace link to a repository with `.gguf` files
-  or MLX weights.
+- The catalog combines **Unsloth, bartowski, LM Studio Community and ggml-org**, the labs' own
+  GGUF releases (**Qwen, Google, IBM Granite, Microsoft, Nous Research**) and the
+  **mradermacher** and **MaziyarPanahi** collections. When several publish the same model, the
+  download dialog lets you pick the source.
+- **＋ Find more models** (Pro mode) searches every GGUF repository on HuggingFace (and MLX on
+  Apple Silicon) and adds a result with one click. It also accepts any HuggingFace link to a
+  repository with `.gguf` files or MLX weights.
+- Pro mode filters by provider, fit, size, format and use case.
 
 ### MLX models (Apple Silicon Macs)
 
@@ -78,7 +97,7 @@ Silicon.
 
 - The first time you launch an MLX model the app sets up the MLX engine by itself (about
   250 MB, one time) in its own `bin/` folder — no Python or Homebrew needed. Update it from
-  ⚙ Settings.
+  Settings.
 - MLX models are served on the same address (`http://127.0.0.1:8080/v1`) with the same API
   key, so apps connected to the GGUF version keep working.
 - MLX models have no built-in chat page; connect an app such as Open WebUI, or VS Code.
@@ -165,10 +184,12 @@ backend/
   downloader.py            resumable multi-file downloads, disk checks, installed models
   runtime.py               llama.cpp build selection (CUDA/Vulkan/Metal/CPU), install, updates
   launcher.py              model server process management (llama.cpp or MLX), API key, health
+  opencode.py              OpenCode provider config, install detection, open in a terminal
   mlx_runtime.py           MLX engine setup on Apple Silicon (uv + private Python + mlx-lm)
   mlx_proxy.py             API-key gateway in front of mlx_lm.server
 scripts/mlx_smoke.py       real MLX end-to-end check (runs in CI on an Apple Silicon Mac)
 frontend/index.html        single-file UI (EN / 中文, dark / light)
+frontend/fonts/            Schibsted Grotesk (SIL Open Font License), bundled so the UI works offline
 packaging/                 release notes, macOS launcher, signing entitlements
 .github/workflows/         CI tests + release builds for Windows, macOS, Linux
 tests/                     pytest suite (no network needed)

@@ -134,6 +134,20 @@ def _evaluate(model: ModelEntry, quant: QuantOption, hw: HardwareProfile, ctx: i
 
 _FIT_RANK = {"Perfect": 0, "Good": 1, "Marginal": 2, "No Fit": 3}
 
+# Coding agents (OpenCode) send ~10k tokens of instructions and tool definitions per request
+AGENT_CTX_CANDIDATES = (65536, 32768)
+
+
+def agent_memory(model: ModelEntry, quant: QuantOption, hw: HardwareProfile) -> Optional[MemResult]:
+    """The largest agent-sized context that still fits well, or None."""
+    native = model.context_k * 1024
+    for c in AGENT_CTX_CANDIDATES:
+        if native >= c:
+            r = _evaluate(model, quant, hw, c)
+            if r.fit in ("Perfect", "Good"):
+                return r
+    return None
+
 
 def estimate_memory(model: ModelEntry, quant: QuantOption, hw: HardwareProfile,
                     ctx: Optional[int] = None) -> MemResult:

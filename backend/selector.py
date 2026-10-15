@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from .hardware import HardwareProfile, profile_hardware
 from .model_repository import ModelEntry, QuantOption, get_models, FULL_PRECISION
 from .benchmark_provider import Benchmarks, catalog_benchmarks, rating_to_score
-from .scoring import MemResult, estimate_memory, persona_score
+from .scoring import MemResult, agent_memory, estimate_memory, persona_score
 from .mlx_runtime import mlx_supported
 
 
@@ -60,6 +60,8 @@ class ModelRow(BaseModel):
     vram_headroom_gb: float
     launch_ctx: int
     downloads: int
+    agent_ctx: int = 0         # largest 32k/64k context that fits (for OpenCode); 0 = none
+    agent_gpu_layers: int = 0
 
 
 class RecommendationDetail(BaseModel):
@@ -121,7 +123,8 @@ def _params_label(m: ModelEntry) -> str:
     return fmt(m.params_b)
 
 
-def _row(m: ModelEntry, q: QuantOption, mem: MemResult, bench: Benchmarks) -> ModelRow:
+def _row(m: ModelEntry, q: QuantOption, mem: MemResult, bench: Benchmarks,
+         agent: Optional[MemResult] = None) -> ModelRow:
     return ModelRow(
         id=m.id, name=m.name, provider=m.provider, family=m.family,
         params_b=m.params_b, params_label=_params_label(m),
@@ -143,6 +146,7 @@ def _row(m: ModelEntry, q: QuantOption, mem: MemResult, bench: Benchmarks) -> Mo
         total_req_gb=mem.total_req_gb, gpu_layers=mem.gpu_layers,
         vram_headroom_gb=mem.vram_headroom_gb, launch_ctx=mem.ctx,
         downloads=m.downloads,
+        agent_ctx=agent.ctx if agent else 0, agent_gpu_layers=agent.gpu_layers if agent else 0,
     )
 
 
@@ -160,7 +164,7 @@ def build_table(hw: Optional[HardwareProfile] = None) -> List[ModelRow]:
     benches = _benches(models)
     for m in models:
         q, mem = pick_quant(m, hw)
-        rows.append(_row(m, q, mem, benches[m.id]))
+        rows.append(_row(m, q, mem, benches[m.id], agent_memory(m, q, hw)))
     rows.sort(key=lambda r: (FIT_ORDER.get(r.fit, 9), -r.score, -r.tok_s))
     return rows
 
@@ -226,7 +230,7 @@ def get_recommendation(model_id: str, persona: str, hw: Optional[HardwareProfile
                          f"and a {best_mem.ctx:,}-token context.")
 
     threads = max(1, hw.physical_cores - (1 if hw.physical_cores > 4 else 0))
-    row = _row(m, best_quant, best_mem, bench)
+    row = _row(m, best_quant, best_mem, bench, agent_memory(m, best_quant, hw))
     return RecommendationDetail(
         row=row,
         why=" ".join(why_parts),
