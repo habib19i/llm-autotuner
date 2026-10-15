@@ -626,10 +626,14 @@ def search_hf(query: str, include_mlx: bool = False, limit: int = 30) -> List[Di
         for src in m.sources:
             known[src.lower()] = m.id
     out = []
+    seen = set()
     for it in sorted(items, key=lambda i: -(i.get("downloads") or 0)):
         rid = it.get("id", "")
         if not REPO_ID_RE.match(rid) or it.get("pipeline_tag") in _NON_CHAT_PIPELINES:
             continue
+        if rid.lower() in seen:  # a repo can match both the gguf and the mlx filter
+            continue
+        seen.add(rid.lower())
         name = rid.split("/")[-1]
         if _NON_CHAT_NAME.search(name):
             continue

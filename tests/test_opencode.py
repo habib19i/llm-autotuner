@@ -109,11 +109,17 @@ def test_open_terminal_rejects_missing_folder(cfg_home, client, monkeypatch, tmp
     assert r.status_code == 400
 
 
-def test_search_hf(client, monkeypatch):
+@pytest.mark.parametrize("mlx", [False, True])
+def test_search_hf(client, monkeypatch, mlx):
+    from backend import mlx_runtime
+    monkeypatch.setattr(mlx_runtime, "mlx_supported", lambda: mlx)
     calls = []
 
     def fake(params):
         calls.append(dict(params))
+        if dict(params)["filter"] == "mlx":  # macOS runs an MLX search too
+            return [{"id": "unsloth/Qwen3-8B-GGUF", "downloads": 900},
+                    {"id": "mlx-community/Cool-Model-12B-4bit", "downloads": 10, "safetensors": {"total": 12.1e9}}]
         return [
             {"id": "unsloth/Qwen3-8B-GGUF", "downloads": 900, "gguf": {"total": 8.19e9, "context_length": 40960}},
             {"id": "someone/Cool-Model-12B-GGUF", "downloads": 50, "likes": 3, "gguf": {"total": 12.1e9}},
@@ -123,8 +129,9 @@ def test_search_hf(client, monkeypatch):
     monkeypatch.setattr(model_repository, "_hf_search_raw", fake)
     res = client.get("/api/models/search", params={"q": "cool"}).json()
     assert calls[0]["filter"] == "gguf" and calls[0]["search"] == "cool"
-    ids = [r["id"] for r in res]
+    ids = [r["id"] for r in res if r["format"] == "gguf"]
     assert ids == ["unsloth/Qwen3-8B-GGUF", "someone/Cool-Model-12B-GGUF"]
+    assert len({r["id"] for r in res}) == len(res)  # no duplicates across the two searches
     assert res[0]["in_catalog"] == "unsloth/Qwen3-8B-GGUF" and res[0]["context_k"] == 40
     assert res[1]["in_catalog"] == "" and res[1]["params_b"] == 12.1
     assert client.get("/api/models/search", params={"q": "a"}).json() == []
