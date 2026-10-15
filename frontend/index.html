@@ -352,12 +352,15 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
 .loading-text{animation:breathe 1.4s ease-in-out infinite}
 .col-fit-dot{width:34px;padding-right:0!important}
 .col-name{min-width:240px;font-weight:600;font-size:var(--s-body)}
-.col-params,.col-score,.col-toks,.col-mem,.col-ctx{text-align:right}
+#model-table .col-params,#model-table .col-score,#model-table .col-toks,#model-table .col-mem,#model-table .col-ctx{text-align:right}
+#model-table th{position:relative}
+#model-table th .sort-arrow{position:absolute;margin-left:2px}  /* out of flow, so header text lines up with the column */
 .score-cell{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 .score-bar-wrap{width:40px;height:8px;background:var(--sunk)}
 .score-bar-fill{height:100%;background:var(--ink)}
 .mem-cell{display:flex;align-items:center;justify-content:flex-end;gap:8px}
 .mem-cell .bar{width:48px;height:8px}
+.score-cell .num,.mem-cell .num{display:inline-block;min-width:3.4em;text-align:right}  /* bars line up whatever the number's width */
 .mode-chip{font-weight:600}
 .mode-chip.GPU{color:var(--ok)}.mode-chip.CPU-GPU{color:var(--warn)}.mode-chip.CPU{color:var(--muted)}.mode-chip.No-Fit{color:var(--bad)}
 .uc-tag{color:var(--muted)}
@@ -2598,11 +2601,11 @@ function renderTable() {
       <td class="col-name">${esc(m.name)}${moe}${inst}</td>
       <td class="col-provider">${esc(m.provider)}</td>
       <td class="col-params">${esc(m.params_label)}</td>
-      <td class="col-score"><div class="score-cell"><div class="score-bar-wrap"><div class="score-bar-fill" style="width:${m.score}%"></div></div><span>${m.score}${m.bench_estimated?'<span class="est">~</span>':''}</span></div></td>
+      <td class="col-score"><div class="score-cell"><div class="score-bar-wrap"><div class="score-bar-fill" style="width:${m.score}%"></div></div><span class="num">${m.score}<span class="est"${m.bench_estimated?'':' style="visibility:hidden"'}>~</span></span></div></td>
       <td class="col-toks">${m.fit==='No Fit'?'—':m.tok_s}</td>
       <td class="col-quant">${esc(m.quant)}</td>
       <td class="col-mode"><span class="mode-chip ${mCls}">${esc(m.mode)}</span></td>
-      <td class="col-mem"><div class="mem-cell">${fitBar(m)}<span>${memDisp}</span></div></td>
+      <td class="col-mem"><div class="mem-cell">${fitBar(m)}<span class="num">${memDisp}</span></div></td>
       <td class="col-ctx">${esc(m.ctx_label)}</td>
       <td class="col-fitlabel"><span class="fit-label ${fCls}">${esc(m.fit)}</span></td>
       <td class="col-usecase"><span class="uc-tag">${esc(m.use_case)}</span></td>`;
