@@ -97,6 +97,7 @@ class LaunchStatus(BaseModel):
     dry_run: bool = False
     api_key_required: bool = False
     backend: str = "llama.cpp"   # llama.cpp | mlx
+    ctx: int = 0                 # context the server was started with (0 = the model's default)
 
 
 def _tail_log(n: int = 25) -> str:
@@ -167,7 +168,8 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
 
     args: List[str] = ["-m", str(model_path), "-c", str(ctx), "-t", str(threads),
                        "-ngl", str(gpu_layers), "--port", str(LLM_PORT), "--host", "127.0.0.1",
-                       "--alias", model_path.name]
+                       "--alias", model_path.name,
+                       "--jinja"]  # chat template with tool calls (OpenCode, agents)
     # Without a key, any web page open in the browser could call the model server
     key = llm_api_key()
     if key:
@@ -193,7 +195,8 @@ def launch(filename: str, ctx: int, threads: int, gpu_layers: int) -> LaunchStat
             f"Port {LLM_PORT} is already in use by another program. Stop it, or set "
             f"AUTOTUNER_LLM_PORT to a free port and restart the app."))
 
-    return _spawn([exe] + args, Path(exe).parent, filename, model_path.name, key, "llama.cpp")
+    return _spawn([exe] + args, Path(exe).parent, filename, model_path.name, key, "llama.cpp",
+                  extra={"ctx": ctx})
 
 
 def _spawn(cmd_vec: List[str], cwd: Path, filename: str, display: str, key: str, backend: str,

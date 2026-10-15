@@ -12,13 +12,14 @@ from .hardware import HardwareProfile, profile_hardware
 import httpx
 
 from .model_repository import (get_models, quant_files, REPO_ID_RE, add_custom_model, remove_custom_model,
-                               find_model, mlx_variants)
+                               find_model, mlx_variants, search_hf)
 from . import mlx_runtime
 from .selector import build_table, get_recommendation
 from .downloader import (resolve_download, start_download, all_jobs, installed_models, cancel_job,
                          delete_model, disk_info, DiskSpaceError)
 from .launcher import launch, stop, status as launch_status
 from . import runtime
+from . import opencode
 from .benchmark_provider import get_arena, _refresh_in_background as refresh_arena
 from .utils import (APP_NAME, APP_VERSION, FRONTEND_DIR, LLM_PORT, get_logger, get_setting, set_setting,
                     hf_token, llm_api_key, regenerate_api_key)
@@ -112,6 +113,15 @@ def api_add_custom(req: CustomModelReq):
     except httpx.HTTPError as e:
         raise HTTPException(502, f"Could not reach HuggingFace: {e}")
     return {"ok": True, "id": e.id, "name": e.name}
+
+
+@app.get("/api/models/search")
+def api_search_models(q: str = "", limit: int = 30):
+    """Search every GGUF (and, on Apple Silicon, MLX) repository on HuggingFace."""
+    try:
+        return search_hf(q[:100], include_mlx=mlx_runtime.mlx_supported(), limit=max(1, min(limit, 60)))
+    except httpx.HTTPError as e:
+        raise HTTPException(502, f"Could not reach HuggingFace: {e}")
 
 
 @app.delete("/api/models/custom/{model_id:path}")
@@ -345,6 +355,7 @@ def api_clear_token():
 @app.post("/api/settings/api-key/regenerate")
 def api_regen_key():
     regenerate_api_key()
+    opencode.sync_api_key()   # keep a configured OpenCode working with the new key
     return _settings()
 
 
@@ -370,6 +381,61 @@ def api_stop():
 @app.get("/api/launch-status")
 def api_launch_status():
     return launch_status()
+
+
+# ─── OpenCode ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/opencode")
+def api_opencode():
+    return opencode.status()
+
+
+class OpenCodeConfigReq(BaseModel):
+    filename: str = Field(..., max_length=400)
+    ctx: int = Field(16384, ge=2048, le=1048576)
+    name: str = Field("", max_length=200)
+    set_default: bool = True
+
+
+@app.post("/api/opencode/preview")
+def api_opencode_preview(req: OpenCodeConfigReq):
+    """The provider block that would be written, for copying into a config by hand."""
+    try:
+        from .utils import safe_model_path
+        safe_model_path(req.filename)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    block = {"$schema": opencode.SCHEMA,
+             "provider": {opencode.PROVIDER_ID: opencode.provider_block(req.filename, req.ctx, req.name)}}
+    if req.set_default:
+        block["model"] = f"{opencode.PROVIDER_ID}/{opencode.model_key(req.filename)}"
+    return block
+
+
+@app.post("/api/opencode/configure")
+def api_opencode_configure(req: OpenCodeConfigReq):
+    try:
+        return opencode.configure(req.filename, req.ctx, req.name, req.set_default)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except OSError as e:
+        raise HTTPException(500, f"Could not write the OpenCode config: {e}")
+
+
+class OpenCodeOpenReq(BaseModel):
+    folder: str = Field("", max_length=1000)
+
+
+@app.post("/api/opencode/open")
+def api_opencode_open(req: Optional[OpenCodeOpenReq] = None):
+    try:
+        return opencode.open_terminal(req.folder if req else "")
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    except OSError as e:
+        raise HTTPException(500, f"Could not open a terminal: {e}")
 
 
 # ─── Frontend ──────────────────────────────────────────────────────────────────
