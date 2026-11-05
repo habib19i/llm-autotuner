@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 APP_NAME = "llm-autotuner"
-APP_VERSION = "2.5.0"
+APP_VERSION = "2.6.0"
 
 if getattr(sys, 'frozen', False) and hasattr(sys, '_MEIPASS'):
     # Running in a PyInstaller bundle

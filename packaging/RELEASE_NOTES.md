@@ -10,6 +10,20 @@ Intel Macs and other systems: see **Run from source** in the README.
 
 ## What's new
 
+Features matching [llmfit](https://github.com/AlexsJones/llmfit):
+
+- **Plan hardware** (Pro → a model → *Plan hardware*): for any context, quantization and target speed, the memory, cores and speed each way of running the model needs, whether this computer can, how much more memory it would take, how many conversations fit at once, and how it would run on 14 common machines.
+- **Simulate hardware**: score every model for a bundled machine (RTX 3060 to 5090, Radeon RX 7900 XTX, M1 to M4 Max, Ryzen AI Max+ 395, DGX Spark) or type exact memory and core counts. A badge shows you are simulating; one click goes back.
+- **Real GPU speeds**: speed estimates use the memory bandwidth of ~80 known GPUs and Apple chips instead of a guess from the amount of VRAM.
+- **Measure speed**: benchmark the running model (tokens per second and time to first token). Measured models show ✓, and your results calibrate the estimates of every other model on this computer (≈).
+- **Compare models** side by side with the best value in each row highlighted.
+- **How big a drive do I need?** (My models): disk sizing for the models you want to keep.
+- **Ollama and LM Studio**: models already installed there are marked, with an *Installed* filter.
+- **Settings**: speed efficiency and a context cap for estimates, and a diagnostic report for bug reports.
+- **REST API** at `/api/v1` (system, models with filters, top picks, plan, storage, benchmarks), with hardware overrides on every endpoint.
+
+### Earlier in 2.5
+
 - **Deploy with OpenCode**: the Deploy page can add the model to [OpenCode](https://opencode.ai)'s settings in one click (your other OpenCode settings are kept; the old file is saved as `.bak`), make it the default model, and open OpenCode on a project folder in a new terminal. Models that fit with a 32k or 64k context offer to launch with it, since coding agents need the room. Regenerating the API key updates OpenCode's settings too.
 - **More models**: the catalog now also reads the GGUF releases of Qwen, Google, IBM Granite, Microsoft and Nous Research, plus the mradermacher and MaziyarPanahi collections, and scans more repositories from every publisher. **Find more models** (Pro mode) searches all of HuggingFace and adds any result with one click. Pro mode has a full provider list and a **Size** filter.
 - **New design**: one memory bar runs through the app (your memory on the first screen, each model's footprint in the lists), a bundled typeface (no web fonts), a light and a dark theme that can follow the system (Settings → Appearance), and a workflow step that previews its top pick as you point at each option.

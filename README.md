@@ -57,11 +57,57 @@ launch the model and click **Open OpenCode** to start it on a project folder in 
   or `curl -fsSL https://opencode.ai/install | bash` on macOS and Linux).
 - Generating a new API key updates OpenCode's settings automatically.
 
+### Plan, simulate, compare, measure
+
+- **Plan hardware** (Pro mode, on a selected model): pick a context, quantization and target
+  speed and see the graphics memory, system memory and cores each way of running it needs
+  (all on the GPU, split, CPU only), the speed to expect, whether this computer can run it and
+  how much more memory it would take, how many conversations fit at once, and how it would run
+  on common machines.
+- **Simulate hardware** (Pro mode, or "Detected wrong?" in the wizard): choose a bundled
+  machine (RTX 3060 to 5090, Radeon RX 7900 XTX, Apple M1 to M4 Max, Ryzen AI Max+ 395,
+  DGX Spark) or type memory and core counts; every score is recomputed. Click the
+  *Simulating* badge to go back.
+- **Compare**: tick models in the Pro table and press *Compare*.
+- **Measure speed**: while a model runs, *Measure speed* (bottom bar or My models) runs a
+  warm-up and three timed requests. Measured speeds show ✓; they also correct the estimates
+  of other models on this computer (≈). Results are kept in `cache/benchmarks.json`.
+- **How big a drive do I need?** (My models): disk sizing for a library of models you switch
+  between, with room for the system, one download and free space.
+- Models you already have in **Ollama** or **LM Studio** are marked in Pro mode
+  (`OLLAMA_HOST`, `LMSTUDIO_HOST`, `LMSTUDIO_API_KEY` if they run elsewhere).
+
+### REST API
+
+The app answers on `http://127.0.0.1:8001/api/v1` (this computer only), for scripts and
+agents. Interactive docs: `/api/docs`.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/v1/system` | detected hardware and the memory bandwidth used for estimates |
+| `GET /api/v1/models` | every model scored for this computer; `min_fit`, `use_case`, `provider`, `search`, `format`, `installed`, `sort`, `limit` |
+| `GET /api/v1/models/top` | the best runnable models (`limit`, `min_fit`, `use_case`) |
+| `GET /api/v1/models/{query}` | models whose id or name matches |
+| `GET /api/v1/plan?model=…` | hardware plan (`context`, `quant`, `target_tps`) |
+| `GET /api/v1/storage` | drive sizing (`keep`, `selection`, `os_reserve`, `scratch`, `headroom`) |
+| `GET /api/v1/benchmarks` | measured runs on this computer |
+
+Every endpoint takes `profile=<id>` (see `GET /api/hardware/profiles`) or `ram_gb`,
+`vram_gb`, `cpu_cores` to answer for other hardware:
+
+```bash
+curl "http://127.0.0.1:8001/api/v1/models/top?use_case=coding&limit=3"
+curl "http://127.0.0.1:8001/api/v1/models/top?profile=rtx-4090-24gb"
+```
+
 ### Settings
 
 - **HuggingFace token** — only needed for gated models (e.g. Llama). Accept the model's
   license on HuggingFace, create a *Read* token at huggingface.co/settings/tokens, paste it.
 - **Appearance** — light, dark, or follow the system.
+- **Estimates** — speed efficiency (how much of the memory bandwidth decoding achieves) and
+  the largest context to plan for.
+- **Diagnostics** — copies a report of what the app detected, for bug reports (no keys).
 - **Model API key** — required by the running model so other websites open in your browser
   can't use it. Copy it or generate a new one.
 - **llama.cpp runtime** — current version and build, one-click updates, and a switch to the
@@ -185,6 +231,13 @@ backend/
   runtime.py               llama.cpp build selection (CUDA/Vulkan/Metal/CPU), install, updates
   launcher.py              model server process management (llama.cpp or MLX), API key, health
   opencode.py              OpenCode provider config, install detection, open in a terminal
+  profiles.py              GPU memory-bandwidth table and bundled machines to simulate
+  plan.py                  hardware plan for one model (paths, sessions, other machines)
+  bench.py                 speed benchmark of the running model, calibration of estimates
+  storage_plan.py          drive sizing for a model library
+  other_runtimes.py        models installed in Ollama / LM Studio
+  doctor.py                diagnostic report
+  api_v1.py                versioned REST API
   mlx_runtime.py           MLX engine setup on Apple Silicon (uv + private Python + mlx-lm)
   mlx_proxy.py             API-key gateway in front of mlx_lm.server
 scripts/mlx_smoke.py       real MLX end-to-end check (runs in CI on an Apple Silicon Mac)
@@ -243,6 +296,12 @@ workflow signs automatically when these repository secrets exist
   the leaderboard get a rating estimated from their size and release date, calibrated on the
   measured models, and are marked with `~`. Published benchmark results (MMLU, HumanEval…)
   are shown only for the exact models they were published for.
+
+## Credits
+
+Plan mode, hardware profiles, benchmarking, drive sizing and the `/api/v1` shape follow
+[llmfit](https://github.com/AlexsJones/llmfit) (MIT) by Alex Jones; the RTX 4090, M3 Max and
+Ryzen AI Max+ 395 profile figures come from its bundled profiles.
 
 ## License
 

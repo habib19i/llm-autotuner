@@ -107,8 +107,10 @@ button:disabled{opacity:.4;cursor:not-allowed}
 /* ── Top bar ─── */
 #topbar{position:fixed;top:0;left:0;right:0;height:var(--topbar-h);background:var(--surface);z-index:100;
   display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 var(--margin)}
-.topbar-left{display:flex;align-items:center;gap:28px;min-width:0}
-.topbar-right{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.topbar-left{display:flex;align-items:center;gap:28px;flex-shrink:0}
+.topbar-right{display:flex;align-items:center;gap:6px;min-width:0;justify-content:flex-end}
+.topbar-right>*{flex-shrink:0}
+.topbar-right>.hw-chip,.topbar-right>.sim-chip{flex-shrink:1;min-width:0}
 .brand{font-weight:800;font-size:var(--s-lead);letter-spacing:-.04em;white-space:nowrap;display:flex;align-items:center;gap:10px}
 .brand-mark{display:flex;width:30px;height:12px;background:var(--sunk)}
 .brand-mark i{display:block;width:62%;background:var(--accent)}
@@ -315,6 +317,10 @@ body.lbar-on #simple-view,body.lbar-on #library-view{bottom:var(--lbar-h)}
 .hw-form-row{display:flex;flex-direction:column;gap:6px}
 .hw-form-label{font-size:var(--s-small);font-weight:600;color:var(--muted)}
 .hw-form-input,.lib-select,.src-select,#search{background:var(--raised);border:0;color:var(--ink);font-size:var(--s-body);padding:11px 14px;width:100%;outline-offset:-2px}
+.hw-num-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+#hw-custom-fields{display:flex;flex-direction:column;gap:14px}
+.sim-chip{cursor:pointer;background:var(--blush);color:var(--ink);font-weight:600;padding:6px 10px;font-size:var(--s-small);white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis;border:0}
+.sim-chip:hover{filter:brightness(.95)}
 .hw-form-input::placeholder,#search::placeholder{color:var(--muted)}
 select.hw-form-input,.lib-select,.src-select{cursor:pointer}
 
@@ -550,6 +556,41 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
   .wz-steps-row .wz-node-label{font-size:13px}
   .cred-row{grid-template-columns:72px minmax(0,1fr) auto}
 }
+/* ── Compare, plan, drive planner ─── */
+.col-cmp{width:36px;padding-right:0!important}
+.cmp-check{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;vertical-align:middle}
+.basis{margin-left:4px;color:var(--ok);font-weight:700}
+.compare-bar{display:flex;align-items:center;gap:14px;margin:0 var(--margin) 8px;padding:10px 16px;background:var(--sage);font-weight:600}
+.compare-bar .btn-primary{padding:8px 16px;font-size:var(--s-small)}
+.modal-box.xwide{max-width:880px}
+.cmp-wrap{overflow-x:auto}
+.cmp-table{border-collapse:collapse;width:100%;font-size:var(--s-small)}
+.cmp-table th,.cmp-table td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+.cmp-table thead th{font-size:var(--s-body);font-weight:800;letter-spacing:-.02em;background:var(--raised)}
+.cmp-table tbody th{color:var(--muted);font-weight:600;white-space:nowrap}
+.cmp-table td.best{background:var(--sage);font-weight:700}
+.cmp-table .sub{display:block;color:var(--muted);font-size:13px}
+.plan-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.plan-facts{list-style:none;display:flex;flex-direction:column;gap:6px;margin-bottom:16px;font-size:var(--s-body)}
+.plan-facts li{padding-left:16px;position:relative}
+.plan-facts li::before{content:'';position:absolute;left:0;top:.55em;width:8px;height:8px;background:var(--accent)}
+.plan-h{font-size:var(--s-body);font-weight:800;margin:22px 0 10px}
+.plan-machines{display:flex;flex-direction:column;gap:4px}
+.pm-row{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(80px,1fr) 90px 100px;gap:14px;align-items:center;background:var(--raised);padding:10px 14px;font-size:var(--s-small)}
+.pm-row.meets{background:var(--sage)}
+.pm-row .bar{height:10px;background:var(--surface)}
+.pm-name{font-weight:600}
+.pm-tps{text-align:right}
+.sp{background:var(--surface);padding:16px 20px;margin:-20px 0 36px}
+.sp summary{cursor:pointer;font-weight:800;font-size:var(--s-body);letter-spacing:-.02em}
+.sp[open] summary{margin-bottom:10px}
+.sp-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:12px 0 16px}
+.sp-nums{display:flex;gap:40px;flex-wrap:wrap;margin-bottom:8px}
+.sp-line{font-size:var(--s-small);color:var(--muted);margin-bottom:8px}
+.sp-models{list-style:none;display:flex;flex-direction:column;gap:4px;font-size:var(--s-small)}
+.sp-models span{color:var(--muted)}
+#set-eff{width:100%;accent-color:var(--accent)}
+@media(max-width:760px){.plan-form,.sp-form,.hw-num-grid{grid-template-columns:1fr 1fr}.pm-row{grid-template-columns:1fr 70px 80px}.pm-row .bar{display:none}}
 @media(max-width:480px){.brand{display:none}.topbar-left{gap:0}}
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
@@ -575,6 +616,7 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
     <span class="hw-chip" id="hw-cpu" data-pro-only style="display:none"></span>
     <span class="hw-chip highlight" id="hw-gpu" data-pro-only style="display:none"></span>
     <span class="hw-chip" id="hw-ram" data-pro-only style="display:none"></span>
+    <button class="sim-chip hidden" id="sim-chip"></button>
     <span class="hw-chip rt-chip hidden" id="rt-chip" title="Open settings"></span>
     <div class="lang-toggle" id="lang-toggle">
       <button class="lang-btn active" id="btn-lang-en">EN</button>
@@ -772,7 +814,7 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
         <svg class="search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="6.5" cy="6.5" r="5"/><line x1="10.5" y1="10.5" x2="15" y2="15"/></svg>
         <input type="text" id="search" autocomplete="off" spellcheck="false" placeholder="Search models…" data-i18n-ph="search-placeholder" aria-label="Search models">
       </div>
-      <div class="toolbar-right"><span class="model-count" id="model-count"></span><button class="icon-btn" id="btn-add-model" title="Search HuggingFace or paste a link">＋ <span data-i18n="btn-add-model">Find more models</span></button><button class="icon-btn" id="btn-refresh" title="Re-fetch the model catalog from HuggingFace">↻ <span data-i18n="btn-refresh">Refresh</span></button></div>
+      <div class="toolbar-right"><span class="model-count" id="model-count"></span><button class="icon-btn" id="btn-add-model" title="Search HuggingFace or paste a link">＋ <span data-i18n="btn-add-model">Find more models</span></button><button class="icon-btn" id="btn-simulate" title="Score the models for other hardware"><span data-i18n="btn-simulate">Simulate hardware</span></button><button class="icon-btn" id="btn-refresh" title="Re-fetch the model catalog from HuggingFace">↻ <span data-i18n="btn-refresh">Refresh</span></button></div>
     </div>
     <div class="toolbar-left">
       <div class="filter-group" id="filter-provider"><span class="filter-label" data-i18n="filter-provider">Provider</span></div>
@@ -791,6 +833,12 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
         <button class="chip" data-size="l">15–40B</button>
         <button class="chip" data-size="xl">40B +</button>
       </div>
+      <div class="filter-group" id="filter-avail">
+        <span class="filter-label" data-i18n="filter-avail">Installed</span>
+        <button class="chip active" data-avail="all" data-i18n="chip-all">All</button>
+        <button class="chip" data-avail="here" data-i18n="chip-here">Downloaded</button>
+        <button class="chip" data-avail="other" data-i18n="chip-other">In Ollama / LM Studio</button>
+      </div>
       <div class="filter-group hidden" id="filter-format">
         <span class="filter-label" data-i18n="filter-format">Format</span>
         <button class="chip active" data-format="all" data-i18n="chip-all">All</button>
@@ -807,9 +855,15 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
       </div>
     </div>
   </div>
+  <div class="compare-bar hidden" id="compare-bar">
+    <span id="compare-text"></span>
+    <button class="btn-primary" id="btn-compare" data-i18n="btn-compare">Compare</button>
+    <button class="btn-ghost" id="btn-compare-clear" data-i18n="btn-compare-clear">Clear</button>
+  </div>
   <div id="table-wrap">
     <table id="model-table">
       <thead><tr>
+        <th class="col-cmp"><span class="sr-only">Compare</span></th>
         <th class="col-fit-dot"><span class="sr-only">Fit</span></th>
         <th class="col-name sortable" data-col="name">Model <span class="sort-arrow"></span></th>
         <th class="col-provider sortable" data-col="provider">Provider <span class="sort-arrow"></span></th>
@@ -823,7 +877,7 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
         <th class="col-fitlabel sortable active-col" data-col="fit">Fit <span class="sort-arrow">↑</span></th>
         <th class="col-usecase">Use case</th>
       </tr></thead>
-      <tbody id="table-body"><tr class="loading-row"><td colspan="12"><span class="loading-text">Loading…</span></td></tr></tbody>
+      <tbody id="table-body"><tr class="loading-row"><td colspan="13"><span class="loading-text">Loading…</span></td></tr></tbody>
     </table>
   </div>
   <div id="detail-panel" class="hidden">
@@ -870,6 +924,8 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
       <button class="btn-primary" id="btn-download" disabled data-i18n="btn-download">Download</button>
       <button class="btn-secondary" id="btn-launch" disabled data-i18n="btn-launch">Launch</button>
       <button class="btn-secondary" id="btn-deploy" disabled data-i18n="btn-deploy">Deploy →</button>
+      <button class="btn-secondary" id="btn-plan" data-i18n="btn-plan">Plan hardware</button>
+      <button class="btn-secondary" id="btn-mark" data-i18n="btn-mark">Add to compare</button>
       <button class="btn-danger hidden" id="btn-delete" data-i18n="btn-delete">Delete</button>
       <button class="btn-secondary hidden" id="btn-remove-custom" data-i18n="btn-remove-custom">Remove from list</button>
       <a class="btn-ghost" id="btn-hf-link" href="#" target="_blank" rel="noopener" data-i18n="btn-hf">HuggingFace ↗</a>
@@ -893,6 +949,21 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
       <button class="btn-secondary" id="btn-lib-folder" data-i18n="lib-open-folder">Open models folder</button>
     </div>
     <div class="lib-storage" id="lib-storage"></div>
+    <details class="sp" id="sp">
+      <summary data-i18n="sp-title">How big a drive do I need?</summary>
+      <p class="set-desc" data-i18n="sp-desc">Pick how many models you want to keep and switch between. Sizes include room for the system, one download in progress and free space.</p>
+      <div class="sp-form">
+        <div class="hw-form-row"><label class="hw-form-label" for="sp-keep" data-i18n="sp-keep">Models to keep</label>
+          <select class="hw-form-input" id="sp-keep"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>8</option><option>10</option></select></div>
+        <div class="hw-form-row"><label class="hw-form-label" for="sp-sel" data-i18n="sp-sel">Which ones</label>
+          <select class="hw-form-input" id="sp-sel"><option value="score" data-i18n="sp-sel-best">The best that run here</option><option value="largest" data-i18n="sp-sel-largest">The largest that run here</option></select></div>
+        <div class="hw-form-row"><label class="hw-form-label" for="sp-os" data-i18n="sp-os">System and apps (GB)</label>
+          <input class="hw-form-input" id="sp-os" type="number" min="0" max="10000" value="100"></div>
+        <div class="hw-form-row"><label class="hw-form-label" for="sp-head" data-i18n="sp-head">Keep free (%)</label>
+          <input class="hw-form-input" id="sp-head" type="number" min="0" max="90" value="15"></div>
+      </div>
+      <div id="sp-result"></div>
+    </details>
     <div id="lib-downloads"></div>
     <div class="lib-tools" id="lib-tools">
       <input type="text" id="lib-search" class="hw-form-input" autocomplete="off" spellcheck="false" data-i18n-ph="lib-search" placeholder="Search your models…" aria-label="Search your models">
@@ -915,6 +986,11 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
     </div>
     <p class="modal-desc" data-i18n="hw-modal-desc">Used only to judge which models fit. Nothing on your computer changes.</p>
     <div class="hw-form">
+      <div class="hw-form-row">
+        <label class="hw-form-label" for="hw-profile" data-i18n="hw-form-machine">Machine</label>
+        <select class="hw-form-input" id="hw-profile"><option value="" data-i18n="hw-machine-custom">Custom — enter the specs below</option></select>
+      </div>
+      <div id="hw-custom-fields">
       <div class="hw-form-row">
         <label class="hw-form-label" for="hw-override-cpu-vendor" data-i18n="hw-form-cpu">Processor brand</label>
         <select class="hw-form-input" id="hw-override-cpu-vendor">
@@ -942,27 +1018,27 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
         <label class="hw-form-label" for="hw-override-gpu-model" data-i18n="hw-form-gpu-model">Graphics model</label>
         <select class="hw-form-input" id="hw-override-gpu-model" disabled><option value="">Select graphics…</option></select>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <div class="hw-num-grid">
         <div class="hw-form-row">
           <label class="hw-form-label" for="hw-override-vram" data-i18n="hw-form-vram">Graphics memory</label>
-          <select class="hw-form-input" id="hw-override-vram">
-            <option value="4">4 GB</option><option value="6">6 GB</option><option value="8">8 GB</option>
-            <option value="10">10 GB</option><option value="12">12 GB</option><option value="16">16 GB</option>
-            <option value="24">24 GB</option><option value="32">32 GB</option><option value="48">48 GB</option>
-            <option value="96">96 GB</option>
-          </select>
+          <input class="hw-form-input" id="hw-override-vram" type="number" min="0" max="2048" step="1" inputmode="decimal">
         </div>
         <div class="hw-form-row">
           <label class="hw-form-label" for="hw-override-ram" data-i18n="hw-form-ram">System memory</label>
-          <select class="hw-form-input" id="hw-override-ram">
-            <option value="8">8 GB</option><option value="16">16 GB</option><option value="32" selected>32 GB</option>
-            <option value="64">64 GB</option><option value="128">128 GB</option><option value="192">192 GB</option>
-            <option value="256">256 GB</option><option value="512">512 GB</option>
-          </select>
+          <input class="hw-form-input" id="hw-override-ram" type="number" min="1" max="4096" step="1" inputmode="decimal">
+        </div>
+        <div class="hw-form-row">
+          <label class="hw-form-label" for="hw-override-cores" data-i18n="hw-form-cores">Processor cores</label>
+          <input class="hw-form-input" id="hw-override-cores" type="number" min="1" max="256" step="1" inputmode="numeric">
         </div>
       </div>
+      <p class="modal-note" data-i18n="hw-form-gb-note">Memory in GB. Graphics memory 0 = no separate graphics card.</p>
     </div>
-    <button class="btn-primary" id="btn-save-hw" style="width:100%" data-i18n="hw-modal-save">Save</button>
+    </div>
+    <div class="set-row">
+      <button class="btn-primary" id="btn-save-hw" data-i18n="hw-modal-save">Save</button>
+      <button class="btn-secondary hidden" id="btn-reset-hw" data-i18n="hw-reset">Back to this computer</button>
+    </div>
   </div>
 </div>
 
@@ -1026,6 +1102,40 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
       <div class="set-title" data-i18n="set-bench-title">Quality data</div>
       <p class="set-desc" id="set-bench"></p>
     </div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-est-title">Estimates</div>
+      <p class="set-desc" data-i18n="set-est-desc">Tune how speed and memory are estimated. Models you benchmark on this computer correct the speed estimates automatically.</p>
+      <div class="hw-form-row">
+        <label class="hw-form-label" for="set-eff"><span data-i18n="set-eff">Speed efficiency</span> <b id="set-eff-val"></b></label>
+        <input id="set-eff" type="range" min="0.3" max="0.9" step="0.05">
+      </div>
+      <div class="hw-form-row">
+        <label class="hw-form-label" for="set-ctx" data-i18n="set-ctx">Largest context to plan for</label>
+        <select class="hw-form-input" id="set-ctx">
+          <option value="0" data-i18n="set-ctx-auto">Automatic</option><option value="4096">4k</option><option value="8192">8k</option>
+          <option value="16384">16k</option><option value="32768">32k</option><option value="65536">64k</option><option value="131072">128k</option>
+        </select>
+      </div>
+      <div class="set-row"><button class="btn-secondary" id="btn-est-reset" data-i18n="set-est-reset">Reset to defaults</button></div>
+    </div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-other-title">Other model apps</div>
+      <p class="set-desc" id="set-other"></p>
+      <div class="set-row"><button class="btn-secondary" id="btn-other-refresh" data-i18n="set-other-refresh">Check again</button></div>
+    </div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-api-title">For scripts and agents</div>
+      <p class="set-desc" id="set-api"></p>
+    </div>
+
+    <div class="set-section">
+      <div class="set-title" data-i18n="set-diag-title">Diagnostics</div>
+      <p class="set-desc" data-i18n="set-diag-desc">A report of what the app detected, for bug reports. It contains no keys or tokens.</p>
+      <div class="set-row"><button class="btn-secondary" id="btn-diag" data-i18n="set-diag-copy">Copy diagnostic report</button></div>
+    </div>
   </div>
 </div>
 
@@ -1040,6 +1150,29 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
     </div>
     <p class="modal-note" id="add-status"></p>
     <div class="search-results" id="search-results"></div>
+  </div>
+</div>
+
+<!-- Plan modal: what hardware a model needs -->
+<div id="plan-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box xwide">
+    <div class="modal-header"><span class="modal-title" id="plan-title" data-i18n="plan-title">Plan hardware</span><button class="icon-btn" id="btn-close-plan" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button></div>
+    <p class="modal-desc" data-i18n="plan-desc">What this model needs to run, and where it would run well.</p>
+    <div class="plan-form">
+      <div class="hw-form-row"><label class="hw-form-label" for="plan-ctx" data-i18n="plan-ctx">Context</label><select class="hw-form-input" id="plan-ctx"></select></div>
+      <div class="hw-form-row"><label class="hw-form-label" for="plan-quant" data-i18n="plan-quant">Quantization</label><select class="hw-form-input" id="plan-quant"></select></div>
+      <div class="hw-form-row"><label class="hw-form-label" for="plan-tps" data-i18n="plan-tps">Target speed (tok/s)</label><input class="hw-form-input" id="plan-tps" type="number" min="1" max="1000" step="1" placeholder="—"></div>
+    </div>
+    <div id="plan-body"><p class="modal-note loading-text">…</p></div>
+  </div>
+</div>
+
+<!-- Compare modal -->
+<div id="compare-modal" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-box xwide">
+    <div class="modal-header"><span class="modal-title" data-i18n="cmp-title">Compare models</span><button class="icon-btn" id="btn-close-compare" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" aria-hidden="true"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button></div>
+    <p class="modal-desc" data-i18n="cmp-desc">Best value in each row is highlighted.</p>
+    <div class="cmp-wrap"><table class="cmp-table" id="cmp-table"></table></div>
   </div>
 </div>
 
@@ -1059,6 +1192,7 @@ body.lbar-on #pro-view{bottom:var(--lbar-h)}
   <div class="launch-bar-left"><span class="running-dot" aria-hidden="true"></span><span id="lbar-model"></span><span class="lbar-sep">·</span><span class="lbar-pid" id="lbar-pid"></span></div>
   <div class="launch-bar-right">
     <a class="lbar-open hidden" id="lbar-open" href="#" target="_blank" rel="noopener" data-i18n="btn-open-chat">Open chat ↗</a>
+    <button class="btn-stop hidden" id="btn-bench" data-i18n="btn-bench">Measure speed</button>
     <button class="btn-stop" id="btn-stop" data-i18n="btn-stop">Stop</button>
   </div>
 </div>
@@ -1272,6 +1406,84 @@ const STRINGS = {
     'oc-path':'Written to {p}. Your other settings are kept; the previous file is saved as .bak.',
     'oc-ctx-low':'This model runs with a {k}k context. OpenCode sends about 10k tokens of instructions with every request, so long sessions will run out of room. A smaller model, or one that fits with 32k+, works better.',
     'oc-not-running':'Launch the model before opening OpenCode. It connects to the running server.',
+    'hw-form-cores':'Processor cores',
+    'hw-form-gb-note':'Memory in GB. Graphics memory 0 = no separate graphics card.',
+    'hw-form-machine':'Machine',
+    'hw-machine-custom':'Custom — enter the specs below',
+    'hw-reset':'Back to this computer',
+    'hw-back':'Showing results for this computer again.',
+    'hw-simulating':'Showing results for: {name}',
+    'sim-chip':'Simulating: {name} · reset',
+    'sim-chip-title':'Click to go back to this computer',
+    'btn-simulate':'Simulate hardware',
+    'filter-avail':'Installed',
+    'chip-here':'Downloaded',
+    'chip-other':'In Ollama / LM Studio',
+    'btn-plan':'Plan hardware',
+    'btn-mark':'Add to compare',
+    'btn-unmark':'Remove from compare',
+    'btn-compare':'Compare',
+    'btn-compare-clear':'Clear',
+    'plan-title':'Plan hardware',
+    'plan-desc':'What this model needs to run, and where it would run well.',
+    'plan-ctx':'Context',
+    'plan-quant':'Quantization',
+    'plan-tps':'Target speed (tok/s)',
+    'cmp-title':'Compare models',
+    'cmp-desc':'Best value in each row is highlighted.',
+    'basis-estimate':'Estimated from memory bandwidth',
+    'basis-calibrated':'Estimate corrected by your benchmarks on this computer',
+    'basis-measured':'Measured on this computer',
+    'measured-line':'measured {n} tok/s, first token {ms} ms ({d})',
+    'cmp-max':'Compare up to {n} models at a time.',
+    'cmp-bar':'{n} marked for comparison',
+    'cmp-score':'Quality score',
+    'cmp-params':'Parameters',
+    'cmp-agent':'Context for agents',
+    'cmp-format':'Format',
+    'plan-loading':'Working it out…',
+    'plan-this-computer':'this computer',
+    'plan-rec':'recommended',
+    'plan-total':'{gb} GB in total at {ctx}k context: {w} GB of weights and {kv} GB of context memory, plus buffers.',
+    'plan-sessions':'{n} conversations at {ctx}k context fit in memory at once.',
+    'plan-bw':'{tps} tok/s needs about {bw} GB/s of memory bandwidth (this computer: {have} GB/s).',
+    'plan-fits-here':'Fits {here}',
+    'plan-machines':'On other machines',
+    'bench-started':'Measuring speed: a warm-up and three runs.',
+    'bench-progress':'Measuring speed… run {i} of {n}',
+    'bench-running':'Measuring speed…',
+    'bench-done':'Measured {n} tok/s, first token after {ms} ms. Estimates on this computer are updated.',
+    'bench-failed':'Benchmark failed: {e}',
+    'btn-bench':'Measure speed',
+    'lib-measured':'Measured {n} tok/s · first token {ms} ms',
+    'sp-title':'How big a drive do I need?',
+    'sp-desc':'Pick how many models you want to keep and switch between. Sizes include room for the system, one download in progress and free space.',
+    'sp-keep':'Models to keep',
+    'sp-sel':'Which ones',
+    'sp-sel-best':'The best that run here',
+    'sp-sel-largest':'The largest that run here',
+    'sp-os':'System and apps (GB)',
+    'sp-head':'Keep free (%)',
+    'sp-min':'Minimum drive',
+    'sp-sug':'Suggested, with {h}% free',
+    'sp-break':'{lib} GB of models + {scratch} GB for a download + {os} GB for the system = {need} GB.',
+    'set-est-title':'Estimates',
+    'set-est-desc':'Tune how speed and memory are estimated. Models you benchmark on this computer correct the speed estimates automatically.',
+    'set-eff':'Speed efficiency',
+    'set-ctx':'Largest context to plan for',
+    'set-ctx-auto':'Automatic',
+    'set-est-reset':'Reset to defaults',
+    'set-other-title':'Other model apps',
+    'set-other-refresh':'Check again',
+    'other-found':'{name}: running at {url}, {n} model(s). Matching models are marked in Pro mode.',
+    'other-missing':'{name}: not running at {url}.',
+    'set-api-title':'For scripts and agents',
+    'set-api-desc':'A REST API answers on this computer, e.g. {url}. Every endpoint is listed at {docs}.',
+    'set-diag-title':'Diagnostics',
+    'set-diag-desc':'A report of what the app detected, for bug reports. It contains no keys or tokens.',
+    'set-diag-copy':'Copy diagnostic report',
+    'diag-copied':'Diagnostic report copied.',
+    'diag-failed':'Could not copy the report.',
       },
   zh: {
     'mode-simple':'简单','mode-pro':'专业',
@@ -1474,6 +1686,84 @@ const STRINGS = {
     'oc-path':'写入 {p}。其他设置保持不变；原文件另存为 .bak。',
     'oc-ctx-low':'该模型以 {k}k 上下文运行。OpenCode 每次请求会附带约 10k token 的指令，长时间使用会超出上下文。更小的模型，或能以 32k 以上上下文运行的模型效果更好。',
     'oc-not-running':'请先启动模型再打开 OpenCode — 它会连接正在运行的服务。',
+    'hw-form-cores':'处理器核心数',
+    'hw-form-gb-note':'内存单位为 GB。显存为 0 表示没有独立显卡。',
+    'hw-form-machine':'机器',
+    'hw-machine-custom':'自定义 — 在下方输入规格',
+    'hw-reset':'回到这台电脑',
+    'hw-back':'已恢复为这台电脑的结果。',
+    'hw-simulating':'当前显示：{name}',
+    'sim-chip':'模拟中：{name} · 重置',
+    'sim-chip-title':'点击回到这台电脑',
+    'btn-simulate':'模拟硬件',
+    'filter-avail':'已安装',
+    'chip-here':'已下载',
+    'chip-other':'在 Ollama / LM Studio 中',
+    'btn-plan':'规划硬件',
+    'btn-mark':'加入对比',
+    'btn-unmark':'移出对比',
+    'btn-compare':'对比',
+    'btn-compare-clear':'清除',
+    'plan-title':'规划硬件',
+    'plan-desc':'运行该模型需要什么，以及它在哪些机器上运行良好。',
+    'plan-ctx':'上下文',
+    'plan-quant':'量化',
+    'plan-tps':'目标速度（tok/s）',
+    'cmp-title':'对比模型',
+    'cmp-desc':'每行的最佳值已高亮。',
+    'basis-estimate':'根据内存带宽估算',
+    'basis-calibrated':'已根据您在本机的基准测试校正',
+    'basis-measured':'在本机实测',
+    'measured-line':'实测 {n} tok/s，首个 token {ms} 毫秒（{d}）',
+    'cmp-max':'一次最多对比 {n} 个模型。',
+    'cmp-bar':'已标记 {n} 个模型待对比',
+    'cmp-score':'质量评分',
+    'cmp-params':'参数量',
+    'cmp-agent':'智能体上下文',
+    'cmp-format':'格式',
+    'plan-loading':'正在计算…',
+    'plan-this-computer':'这台电脑',
+    'plan-rec':'推荐',
+    'plan-total':'{ctx}k 上下文下共需 {gb} GB：权重 {w} GB，上下文内存 {kv} GB，另加缓冲。',
+    'plan-sessions':'内存可同时容纳 {n} 个 {ctx}k 上下文的对话。',
+    'plan-bw':'{tps} tok/s 约需 {bw} GB/s 的内存带宽（这台电脑：{have} GB/s）。',
+    'plan-fits-here':'在{here}上',
+    'plan-machines':'在其他机器上',
+    'bench-started':'正在测速：预热一次，再运行三次。',
+    'bench-progress':'正在测速… 第 {i}/{n} 次',
+    'bench-running':'正在测速…',
+    'bench-done':'实测 {n} tok/s，首个 token 用时 {ms} 毫秒。本机的估算已更新。',
+    'bench-failed':'测速失败：{e}',
+    'btn-bench':'测量速度',
+    'lib-measured':'实测 {n} tok/s · 首个 token {ms} 毫秒',
+    'sp-title':'我需要多大的硬盘？',
+    'sp-desc':'选择要保留并切换使用的模型数量。容量包含系统、一次进行中的下载和剩余空间。',
+    'sp-keep':'保留的模型数',
+    'sp-sel':'选择哪些',
+    'sp-sel-best':'本机能运行的最佳模型',
+    'sp-sel-largest':'本机能运行的最大模型',
+    'sp-os':'系统与应用（GB）',
+    'sp-head':'保留空闲（%）',
+    'sp-min':'最低容量',
+    'sp-sug':'建议容量（保留 {h}% 空闲）',
+    'sp-break':'模型 {lib} GB + 下载 {scratch} GB + 系统 {os} GB = {need} GB。',
+    'set-est-title':'估算',
+    'set-est-desc':'调整速度和内存的估算方式。在本机测速的模型会自动校正速度估算。',
+    'set-eff':'速度效率',
+    'set-ctx':'规划的最大上下文',
+    'set-ctx-auto':'自动',
+    'set-est-reset':'恢复默认',
+    'set-other-title':'其他模型应用',
+    'set-other-refresh':'重新检查',
+    'other-found':'{name}：运行于 {url}，{n} 个模型。匹配的模型会在专业模式中标记。',
+    'other-missing':'{name}：未在 {url} 运行。',
+    'set-api-title':'供脚本和智能体使用',
+    'set-api-desc':'本机提供 REST API，例如 {url}。所有接口列于 {docs}。',
+    'set-diag-title':'诊断',
+    'set-diag-desc':'应用检测结果的报告，用于提交问题。不包含任何密钥或令牌。',
+    'set-diag-copy':'复制诊断报告',
+    'diag-copied':'已复制诊断报告。',
+    'diag-failed':'无法复制报告。',
       }
 };
 
@@ -1492,7 +1782,7 @@ const $ = id => document.getElementById(id);
 let currentMode='simple', currentTheme='dark', currentLang='en';
 let wizardPersona=null, wizardStep=0;
 let selectedId=null, sortCol='fit', sortDir='asc', detailPersona='general', detailRec=null;
-let filterSearch='', filterProvider='all', filterFit='all', filterUseCase='all', filterFormat='all', filterSize='all';
+let filterSearch='', filterProvider='all', filterFit='all', filterUseCase='all', filterFormat='all', filterSize='all', filterAvail='all';
 let mlxInfo = null;     // /api/runtime/mlx
 let filtered=[];
 
@@ -1545,6 +1835,16 @@ const API = {
   refresh:        ()           => post('/api/refresh'),
   recommend:      (id, p)      => post('/api/recommend', { model_id:id, persona:p, hardware: hwOverride || null }),
   hfFiles:        (id)         => req('/api/hf-files/' + id),
+  hwProfiles:     ()           => req('/api/hardware/profiles'),
+  hwProfile:      (id)         => req('/api/hardware/profiles/' + encodeURIComponent(id)),
+  plan:           (p)          => post('/api/plan', { ...p, hardware: hwOverride || null }),
+  storagePlan:    (p)          => post('/api/storage-plan', { ...p, hardware: hwOverride || null }),
+  bench:          ()           => post('/api/bench'),
+  benchStatus:    ()           => req('/api/bench'),
+  benchResults:   ()           => req('/api/bench/results'),
+  otherRuntimes:  (refresh)    => req('/api/runtimes/others' + (refresh ? '?refresh=true' : '')),
+  doctor:         ()           => fetch('/api/doctor').then(r => r.text()),
+  setEstimates:   (p)          => post('/api/settings/estimates', p),
   download:       (id, quant)  => post('/api/download', { model_id:id, quant }),  // id may be any source repo
   downloads:      ()           => req('/api/downloads'),
   cancel:         (key)        => req('/api/downloads/' + encodeURI(key), { method:'DELETE' }),
@@ -1618,6 +1918,9 @@ function setTheme(th, save=true) {
 }
 
 function renderHwChips() {
+  const sim = $('sim-chip');
+  sim.classList.toggle('hidden', !hwOverride);
+  if (hwOverride) { sim.textContent = t('sim-chip', { name: hwOverride.simulated || 'Custom' }); sim.title = t('sim-chip-title'); }
   const hw = hwOverride || hwData;
   if (!hw) return;
   $('hw-cpu').textContent = hw.cpu_name + ' (' + hw.physical_cores + 'c)';
@@ -1642,9 +1945,9 @@ function setMode(mode) {
   renderHwChips();
   if (!hwData) API.hardware().then(hw => { hwData = hw; renderHwChips(); }).catch(()=>{});
   if (allModels.length === 0) {
-    $('table-body').innerHTML = `<tr class="loading-row"><td colspan="12"><span class="loading-text">Loading…</span></td></tr>`;
+    $('table-body').innerHTML = `<tr class="loading-row"><td colspan="13"><span class="loading-text">Loading…</span></td></tr>`;
     loadModels().then(() => { buildProviderChips(); applyFilters(); })
-      .catch(e => { $('table-body').innerHTML = `<tr class="loading-row"><td colspan="12" style="color:var(--bad)">${esc(e.message)}</td></tr>`; });
+      .catch(e => { $('table-body').innerHTML = `<tr class="loading-row"><td colspan="13" style="color:var(--bad)">${esc(e.message)}</td></tr>`; });
   } else {
     buildProviderChips(); applyFilters();
   }
@@ -1675,6 +1978,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('click', () => document.querySelectorAll('.lib-more').forEach(m => m.remove()));
   $('lib-search').addEventListener('input', () => renderLibraryGrid(true));
   $('lib-sort').addEventListener('change', () => renderLibraryGrid(true));
+  $('sp').addEventListener('toggle', () => { if ($('sp').open) runStoragePlan(); });
+  ['sp-keep', 'sp-sel', 'sp-os', 'sp-head'].forEach(id => $(id).addEventListener('change', runStoragePlan));
   $('btn-lib-folder').addEventListener('click', () => API.openFolder().catch(e => toast(t('lib-open-failed', { e: e.message }), 'error')));
   const bar = $('launch-bar');
   new MutationObserver(() => document.body.classList.toggle('lbar-on', !bar.classList.contains('hidden')))
@@ -1697,12 +2002,25 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-view-all').addEventListener('click', e => { e.preventDefault(); setMode('pro'); });
   $('btn-change-workflow').addEventListener('click', e => { e.preventDefault(); goWizardStep(3); });
   $('btn-stop').addEventListener('click', stopModel);
+  $('btn-bench').addEventListener('click', startBench);
   $('btn-refresh').addEventListener('click', refreshCatalog);
   $('btn-settings').addEventListener('click', openSettings);
   $('rt-chip').addEventListener('click', openSettings);
   $('btn-close-settings').addEventListener('click', () => $('settings-modal').classList.add('hidden'));
   $('settings-modal').addEventListener('click', e => { if (e.target===$('settings-modal')) $('settings-modal').classList.add('hidden'); });
   $('btn-save-token').addEventListener('click', saveToken);
+  $('set-eff').addEventListener('input', () => setVal('set-eff-val', (+$('set-eff').value).toFixed(2)));
+  $('set-eff').addEventListener('change', () => saveEstimates({ speed_efficiency: +$('set-eff').value }));
+  $('set-ctx').addEventListener('change', () => saveEstimates({ max_context: +$('set-ctx').value }));
+  $('btn-est-reset').addEventListener('click', () => saveEstimates({ speed_efficiency: 0.6, max_context: 0 }));
+  $('btn-other-refresh').addEventListener('click', async () => { await refreshOtherRuntimes(true); renderSettingsOther(); });
+  $('btn-diag').addEventListener('click', async () => {
+    try {
+      const text = await API.doctor();
+      await navigator.clipboard.writeText(text);
+      toast(t('diag-copied'), 'ok');
+    } catch(e) { toast(t('diag-failed'), 'error'); }
+  });
   $('hf-token-input').addEventListener('keydown', e => { if (e.key==='Enter') saveToken(); });
   $('btn-clear-token').addEventListener('click', async () => {
     try { settingsInfo = await API.clearToken(); renderSettings(); toast(t('hf-removed')); } catch(e) { toast(e.message,'error'); }
@@ -1757,23 +2075,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('btn-hw-override').addEventListener('click', e => {
     e.preventDefault();
-    const hw = hwOverride || hwData;
-    if (!hw) return;
-    const nearest = (sel, v) => {
-      const opts=[...sel.options].map(o=>+o.value);
-      sel.value = String(opts.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a, opts[0]));
-    };
-    nearest($('hw-override-vram'), hw.gpu.total_vram_gb || 8);
-    nearest($('hw-override-ram'), hw.total_ram_gb || 32);
-    $('hw-override-modal').classList.remove('hidden');
+    openSimulator();
   });
   $('btn-close-hw-modal').addEventListener('click', () => $('hw-override-modal').classList.add('hidden'));
   $('hw-override-modal').addEventListener('click', e => { if(e.target===$('hw-override-modal')) $('hw-override-modal').classList.add('hidden'); });
   $('quant-modal').addEventListener('click', e => { if(e.target===$('quant-modal')) $('quant-modal').classList.add('hidden'); });
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') ['hw-override-modal','quant-modal','settings-modal','add-modal'].forEach(id => $(id).classList.add('hidden'));
+    if (e.key === 'Escape') ['hw-override-modal','quant-modal','settings-modal','add-modal','plan-modal','compare-modal'].forEach(id => $(id).classList.add('hidden'));
   });
   $('btn-save-hw').addEventListener('click', saveHwOverride);
+  $('btn-reset-hw').addEventListener('click', () => { $('hw-override-modal').classList.add('hidden'); resetHardware(); });
+  $('sim-chip').addEventListener('click', resetHardware);
+  $('hw-profile').addEventListener('change', () => $('hw-custom-fields').classList.toggle('hidden', !!$('hw-profile').value));
 
   // Copy buttons (credentials)
   document.addEventListener('click', e => {
@@ -1808,6 +2121,11 @@ document.addEventListener('DOMContentLoaded', () => {
     $('filter-fit').querySelectorAll('[data-fit]').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active'); applyFilters();
   }));
+  $('filter-avail').querySelectorAll('[data-avail]').forEach(btn => btn.addEventListener('click', () => {
+    filterAvail=btn.dataset.avail;
+    $('filter-avail').querySelectorAll('[data-avail]').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active'); applyFilters();
+  }));
   $('filter-size').querySelectorAll('[data-size]').forEach(btn => btn.addEventListener('click', () => {
     filterSize=btn.dataset.size;
     $('filter-size').querySelectorAll('[data-size]').forEach(b=>b.classList.remove('active'));
@@ -1830,6 +2148,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (selectedId) loadDetailRecommendation(selectedId);
   }));
   $('btn-close-detail').addEventListener('click', closeDetail);
+  $('btn-simulate').addEventListener('click', openSimulator);
+  $('btn-plan').addEventListener('click', () => { if (selectedId) openPlan(selectedId); });
+  $('btn-mark').addEventListener('click', () => { if (selectedId) { toggleCompare(selectedId, !COMPARE.includes(selectedId)); renderTable(); } });
+  $('btn-compare').addEventListener('click', openCompare);
+  $('btn-compare-clear').addEventListener('click', () => { COMPARE.length = 0; renderCompareBar(); renderTable(); if (selectedId) openDetail(selectedId); });
+  $('btn-close-compare').addEventListener('click', () => $('compare-modal').classList.add('hidden'));
+  $('compare-modal').addEventListener('click', e => { if (e.target === $('compare-modal')) $('compare-modal').classList.add('hidden'); });
+  $('btn-close-plan').addEventListener('click', () => $('plan-modal').classList.add('hidden'));
+  $('plan-modal').addEventListener('click', e => { if (e.target === $('plan-modal')) $('plan-modal').classList.add('hidden'); });
+  ['plan-ctx', 'plan-quant'].forEach(id => $(id).addEventListener('change', loadPlan));
+  let tpsTimer = null;
+  $('plan-tps').addEventListener('input', () => { clearTimeout(tpsTimer); tpsTimer = setTimeout(loadPlan, 400); });
+  refreshOtherRuntimes(false);
   $('btn-download').addEventListener('click', () => { if (selectedId) openQuantModal(selectedId); });
   $('btn-launch').addEventListener('click', () => { if (selectedId) proLaunch(selectedId); });
   $('btn-deploy').addEventListener('click', () => { if (selectedId) proDeploy(selectedId); });
@@ -1840,38 +2171,81 @@ document.addEventListener('DOMContentLoaded', () => {
 /* ══════════════════════════════════════
    HARDWARE OVERRIDE
 ══════════════════════════════════════ */
-async function saveHwOverride() {
-  if (!hwData) return;
-  const cpuM = $('hw-override-cpu-model').value;
-  const gpuVendor = $('hw-override-gpu-vendor').value;
-  const gpuM = $('hw-override-gpu-model').value;
-  const vram = parseFloat($('hw-override-vram').value) || hwData.gpu.total_vram_gb;
-  const ram = parseFloat($('hw-override-ram').value) || hwData.total_ram_gb;
-  const integrated = gpuVendor ? (gpuVendor === 'Integrated' || gpuVendor === 'Apple') : hwData.gpu.integrated;
-  const vendor = gpuVendor === 'Integrated' ? (/AMD/i.test(gpuM) ? 'AMD' : 'Intel') : (gpuVendor || hwData.gpu.vendor);
-  const ramAvail = Math.max(1, ram * 0.8);
+let hwProfiles = null;
 
-  hwOverride = {
-    ...hwData,
-    cpu_name: cpuM || hwData.cpu_name,
-    total_ram_gb: ram,
-    available_ram_gb: +ramAvail.toFixed(1),
-    gpu: {
-      ...hwData.gpu,
-      name: gpuM || hwData.gpu.name,
-      vendor, integrated,
-      cuda: vendor === 'NVIDIA', metal: vendor === 'Apple', vulkan: vendor !== 'Apple',
-      total_vram_gb: vendor === 'Apple' ? +(ram*0.75).toFixed(1) : vram,
-      free_vram_gb: vendor === 'Apple' ? +(ramAvail*0.75).toFixed(1) : +(vram * 0.92).toFixed(1),
-    }
-  };
+async function openSimulator() {
+  const hw = hwOverride || hwData;
+  if (!hw) return;
+  $('hw-override-vram').value = hw.gpu.integrated && hw.gpu.vendor !== 'Apple' ? 0 : Math.round(hw.gpu.total_vram_gb);
+  $('hw-override-ram').value = Math.round(hw.total_ram_gb);
+  $('hw-override-cores').value = hw.physical_cores;
+  $('btn-reset-hw').classList.toggle('hidden', !hwOverride);
+  $('hw-override-modal').classList.remove('hidden');
+  if (!hwProfiles) {
+    try { hwProfiles = await API.hwProfiles(); } catch(e) { hwProfiles = []; }
+    $('hw-profile').innerHTML = `<option value="">${esc(t('hw-machine-custom'))}</option>` +
+      hwProfiles.map(p => `<option value="${esc(p.id)}">${esc(p.label)}</option>`).join('');
+  }
+  const cur = hwProfiles.find(p => hwOverride && p.label === hwOverride.simulated);
+  $('hw-profile').value = cur ? cur.id : '';
+  $('hw-custom-fields').classList.toggle('hidden', !!cur);
+}
+
+/** Recompute everything that depends on the hardware (simulated or real). */
+async function hardwareChanged() {
   try { await loadModels(); } catch(e) { toast(e.message, 'error'); }
-
   renderHardwareStep();
   renderHwChips();
   if (wizardPersona && wizardStep===4) renderRecs();
-  if (currentMode==='pro') { applyFilters(); if (selectedId) openDetail(selectedId); }
+  if (currentMode==='pro') { buildProviderChips(); applyFilters(); if (selectedId) openDetail(selectedId); }
+  if (currentMode==='library') renderLibraryGrid(true);
+}
+
+async function resetHardware() {
+  hwOverride = null;
+  await hardwareChanged();
+  toast(t('hw-back'));
+}
+
+async function saveHwOverride() {
+  if (!hwData) return;
+  const prof = $('hw-profile').value;
+  if (prof) {
+    try { hwOverride = await API.hwProfile(prof); }
+    catch(e) { toast(e.message, 'error'); return; }
+  } else {
+    const cpuM = $('hw-override-cpu-model').value;
+    const gpuVendor = $('hw-override-gpu-vendor').value;
+    const gpuM = $('hw-override-gpu-model').value;
+    const num = (id, d) => { const v = parseFloat($(id).value); return isFinite(v) && v >= 0 ? v : d; };
+    const ram = Math.max(1, num('hw-override-ram', hwData.total_ram_gb));
+    let vram = num('hw-override-vram', hwData.gpu.total_vram_gb);
+    const cores = Math.max(1, Math.round(num('hw-override-cores', hwData.physical_cores)));
+    const apple = gpuVendor === 'Apple' || (!gpuVendor && hwData.gpu.vendor === 'Apple');
+    const integrated = apple || gpuVendor === 'Integrated' || vram === 0;
+    const vendor = gpuVendor === 'Integrated' ? (/AMD/i.test(gpuM) ? 'AMD' : 'Intel') : (gpuVendor || hwData.gpu.vendor);
+    const ramAvail = Math.max(1, ram * 0.85);
+    if (integrated && !apple) vram = Math.min(2, ram / 4);
+    const gpuName = gpuM || (vram === 0 || integrated ? (apple ? hwData.gpu.name : 'Integrated graphics') : hwData.gpu.name);
+    hwOverride = {
+      ...hwData,
+      cpu_name: cpuM || hwData.cpu_name,
+      physical_cores: cores, logical_cores: cores * 2,
+      total_ram_gb: ram, available_ram_gb: +ramAvail.toFixed(1),
+      gpu_bandwidth_gbps: null, cpu_bandwidth_gbps: null,
+      simulated: [gpuName, `${ram} GB`].join(', '),
+      gpu: {
+        ...hwData.gpu,
+        name: gpuName, vendor, integrated,
+        cuda: vendor === 'NVIDIA', metal: vendor === 'Apple', vulkan: vendor !== 'Apple',
+        total_vram_gb: apple ? +(ram*0.75).toFixed(1) : vram,
+        free_vram_gb: apple ? +(ramAvail*0.75).toFixed(1) : integrated ? vram : +(vram * 0.95).toFixed(1),
+      }
+    };
+  }
   $('hw-override-modal').classList.add('hidden');
+  await hardwareChanged();
+  toast(t('hw-simulating', { name: hwOverride.simulated }), 'ok');
 }
 
 /* ══════════════════════════════════════
@@ -2470,6 +2844,7 @@ function renderLaunchBar(st) {
     $('lbar-pid').textContent = st.message;
     $('lbar-pid').title = st.cmd || '';
     $('lbar-open').classList.add('hidden');
+    $('btn-bench').classList.add('hidden');
     return;
   }
   $('lbar-model').textContent = st.ready ? t('st-running', { name }) : t('st-loading', { name });
@@ -2478,6 +2853,9 @@ function renderLaunchBar(st) {
   const open = $('lbar-open');
   open.href = st.chat_url || '#';
   open.classList.toggle('hidden', !st.ready || !st.chat_url);
+  $('btn-bench').classList.toggle('hidden', !st.ready);
+  $('btn-bench').disabled = benchPolling;
+  if (benchPolling) $('lbar-pid').textContent = t('bench-running');
 }
 
 /* ══════════════════════════════════════
@@ -2546,6 +2924,8 @@ function applyFilters() {
     if(filterProvider!=='all'&&m.provider!==filterProvider) return false;
     if(filterFit!=='all'&&m.fit!==filterFit) return false;
     if(filterFormat!=='all'&&(m.format||'gguf')!==filterFormat) return false;
+    if(filterAvail==='here'&&!installedFor(m.id)) return false;
+    if(filterAvail==='other'&&!OTHER.matches[m.id]) return false;
     if(filterSize!=='all'){
       const b=m.params_b, ok={s:b<=4, m:b>4&&b<=15, l:b>15&&b<=40, xl:b>40}[filterSize];
       if(!ok) return false;
@@ -2584,7 +2964,7 @@ function setSort(col) {
 
 function renderTable() {
   const tbody=$('table-body');
-  if(!filtered.length){tbody.innerHTML=`<tr class="loading-row"><td colspan="12">No models match these filters.</td></tr>`;return;}
+  if(!filtered.length){tbody.innerHTML=`<tr class="loading-row"><td colspan="13">No models match these filters.</td></tr>`;return;}
   const frag=document.createDocumentFragment();
   for(const m of filtered){
     const tr=document.createElement('tr');
@@ -2593,16 +2973,18 @@ function renderTable() {
     const inst=(m.format==='mlx'?`<span class="fmt-badge" title="${esc(t('mlx-badge-title'))}">MLX</span>`:'')
       + (installedFor(m.id)?`<span class="inst-badge">${esc(t('tag-on-disk'))}</span>`:'')
       + (m.gated?`<span class="lock-badge" title="${esc(t('gated-title'))}">${esc(t('tag-gated'))}</span>`:'')
-      + (m.custom?`<span class="cust-badge" title="${esc(t('custom-title'))}">${esc(t('tag-added'))}</span>`:'');
+      + (m.custom?`<span class="cust-badge" title="${esc(t('custom-title'))}">${esc(t('tag-added'))}</span>`:'')
+      + (OTHER.matches[m.id]?`<span class="cust-badge" title="${esc(OTHER.matches[m.id].join('\n'))}">${esc(OTHER.matches[m.id][0].split(':')[0])}</span>`:'');
     const fCls=m.fit.replace(' ','-'), mCls=m.mode.replace('+','-').replace(' ','-');
     const memDisp=m.mem_pct>200?'>200%':m.mem_pct+'%';
     tr.innerHTML=`
+      <td class="col-cmp"><input type="checkbox" class="cmp-check" aria-label="${esc(t('btn-mark'))}" ${COMPARE.includes(m.id)?'checked':''}></td>
       <td class="col-fit-dot"><span class="fit-dot ${fCls}"></span></td>
       <td class="col-name">${esc(m.name)}${moe}${inst}</td>
       <td class="col-provider">${esc(m.provider)}</td>
       <td class="col-params">${esc(m.params_label)}</td>
       <td class="col-score"><div class="score-cell"><div class="score-bar-wrap"><div class="score-bar-fill" style="width:${m.score}%"></div></div><span class="num">${m.score}<span class="est"${m.bench_estimated?'':' style="visibility:hidden"'}>~</span></span></div></td>
-      <td class="col-toks">${m.fit==='No Fit'?'—':m.tok_s}</td>
+      <td class="col-toks" title="${esc(t('basis-'+(m.tok_s_basis||'estimate')))}">${m.fit==='No Fit'?'—':m.tok_s}${m.tok_s_basis==='measured'?'<span class="basis">✓</span>':m.tok_s_basis==='calibrated'?'<span class="basis">≈</span>':''}</td>
       <td class="col-quant">${esc(m.quant)}</td>
       <td class="col-mode"><span class="mode-chip ${mCls}">${esc(m.mode)}</span></td>
       <td class="col-mem"><div class="mem-cell">${fitBar(m)}<span class="num">${memDisp}</span></div></td>
@@ -2612,6 +2994,9 @@ function renderTable() {
     tr.tabIndex=0;
     tr.addEventListener('keydown',e=>{ if(e.key==='Enter') selectModel(m.id); });
     tr.addEventListener('click',()=>selectModel(m.id));
+    const cb=tr.querySelector('.cmp-check');
+    cb.addEventListener('click',e=>e.stopPropagation());
+    cb.addEventListener('change',()=>toggleCompare(m.id, cb.checked));
     frag.appendChild(tr);
   }
   tbody.innerHTML=''; tbody.appendChild(frag);
@@ -2631,7 +3016,8 @@ function selectModel(id){
 function fillDetailStats(r) {
   const fe=$('d-fit'); fe.textContent=r.fit; fe.className=`stat-val fit-label ${r.fit.replace(' ','-')}`;
   $('d-mode').textContent=r.mode; $('d-quant').textContent=r.quant;
-  $('d-toks').textContent=r.fit==='No Fit'?'—':r.tok_s+' tok/s';
+  $('d-toks').textContent=r.fit==='No Fit'?'—':r.tok_s+' tok/s'+(r.tok_s_basis==='measured'?' ✓':r.tok_s_basis==='calibrated'?' ≈':'');
+  $('d-toks').title=t('basis-'+(r.tok_s_basis||'estimate'))+(r.measured_tok_s?' · '+t('measured-line',{n:r.measured_tok_s,ms:Math.round(r.measured_ttft_ms||0),d:r.measured_date}):'');
   $('d-mem').textContent=r.total_req_gb+' GB'; $('d-layers').textContent=r.gpu_layers;
   $('d-ctx').textContent=Math.round(r.launch_ctx/1024)+'k / '+r.ctx_label; $('d-size').textContent='~'+r.size_gb+' GB';
 }
@@ -2667,6 +3053,7 @@ function openDetail(id){
   $('btn-launch').title = inst ? inst.filename : '';
   $('btn-delete').classList.toggle('hidden', !inst);
   $('btn-remove-custom').classList.toggle('hidden', !m.custom);
+  setVal('btn-mark', t(COMPARE.includes(id) ? 'btn-unmark' : 'btn-mark'));
   if (DL.status !== 'downloading' || DL.modelId !== id) $('progress-block').classList.add('hidden');
 }
 
@@ -2810,6 +3197,28 @@ function renderSettings(benchInfo) {
   if (benchInfo) setVal('set-bench', t('bench-desc', { d: benchInfo.published || '—' }));
   renderSettingsRuntime();
   renderSettingsMlx();
+  $('set-eff').value = st.speed_efficiency ?? 0.6;
+  setVal('set-eff-val', (+$('set-eff').value).toFixed(2));
+  $('set-ctx').value = String(st.max_context || 0);
+  renderSettingsOther();
+  setVal('set-api', t('set-api-desc', { url: location.origin + '/api/v1/models/top', docs: location.origin + '/api/docs' }));
+}
+
+function renderSettingsOther() {
+  const rts = OTHER.runtimes || [];
+  setVal('set-other', rts.length ? rts.map(r => r.running ? t('other-found', { name: r.name, n: r.models.length, url: r.url })
+                                                          : t('other-missing', { name: r.name, url: r.url })).join('\n')
+                                 : t('oc-checking'));
+}
+
+async function saveEstimates(body) {
+  try {
+    settingsInfo = await API.setEstimates(body);
+    renderSettings();
+    await loadModels();
+    if (currentMode === 'pro') { applyFilters(); if (selectedId) openDetail(selectedId); }
+    if (wizardStep === 4 && wizardPersona) renderRecs();
+  } catch(e) { toast(e.message, 'error'); }
 }
 
 function renderSettingsMlx() {
@@ -3009,6 +3418,184 @@ function proDeploy(id) {
 }
 
 /* ══════════════════════════════════════
+   COMPARE (several models side by side)
+══════════════════════════════════════ */
+const COMPARE = [];
+const COMPARE_MAX = 6;
+
+function toggleCompare(id, on) {
+  const i = COMPARE.indexOf(id);
+  if (on && i < 0) {
+    if (COMPARE.length >= COMPARE_MAX) { toast(t('cmp-max', { n: COMPARE_MAX })); renderTable(); return; }
+    COMPARE.push(id);
+  } else if (!on && i >= 0) COMPARE.splice(i, 1);
+  renderCompareBar();
+  if (selectedId === id) setVal('btn-mark', t(COMPARE.includes(id) ? 'btn-unmark' : 'btn-mark'));
+}
+
+function renderCompareBar() {
+  $('compare-bar').classList.toggle('hidden', !COMPARE.length);
+  setVal('compare-text', t('cmp-bar', { n: COMPARE.length }));
+  $('btn-compare').disabled = COMPARE.length < 2;
+}
+
+function openCompare() {
+  const ms = COMPARE.map(id => allModels.find(m => m.id === id)).filter(Boolean);
+  if (ms.length < 2) return;
+  const FIT = { Perfect: 3, Good: 2, Marginal: 1, 'No Fit': 0 };
+  // [label, value, sort key (higher is better) or null, formatted]
+  const rows = [
+    [t('stat-fit'), m => m.fit, m => FIT[m.fit]],
+    [t('cmp-score'), m => m.score + (m.bench_estimated ? ' ~' : ''), m => m.score],
+    [t('stat-toks'), m => m.fit === 'No Fit' ? '—' : m.tok_s + ' tok/s' + (m.tok_s_basis === 'measured' ? ' ✓' : ''), m => m.fit === 'No Fit' ? -1 : m.tok_s],
+    [t('stat-mem'), m => `${m.total_req_gb} GB · ${m.mem_pct}%`, m => -m.mem_pct],
+    [t('stat-size'), m => m.size_gb + ' GB', m => -m.size_gb],
+    [t('cmp-params'), m => m.params_label, null],
+    [t('stat-quant'), m => m.quant, null],
+    [t('stat-mode'), m => m.mode, null],
+    [t('stat-ctx'), m => Math.round(m.launch_ctx / 1024) + 'k / ' + m.ctx_label, m => m.ctx_k],
+    [t('cmp-agent'), m => m.agent_ctx ? Math.round(m.agent_ctx / 1024) + 'k' : '—', m => m.agent_ctx],
+    ['Arena', m => m.arena_elo || ('~' + m.rating), m => m.rating],
+    [t('filter-usecase'), m => m.use_case, null],
+    [t('filter-provider'), m => m.provider, null],
+    [t('cmp-format'), m => (m.format || 'gguf').toUpperCase(), null],
+  ];
+  const head = `<tr><th></th>${ms.map(m => `<th>${esc(m.name)}</th>`).join('')}</tr>`;
+  const body = rows.map(([label, val, key]) => {
+    let best = null;
+    if (key) { const ks = ms.map(key); const mx = Math.max(...ks); if (ks.filter(k => k === mx).length < ks.length) best = mx; }
+    return `<tr><th scope="row">${esc(label)}</th>${ms.map(m => `<td class="${key && best !== null && key(m) === best ? 'best' : ''}">${esc(val(m))}</td>`).join('')}</tr>`;
+  }).join('');
+  $('cmp-table').innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
+  $('compare-modal').classList.remove('hidden');
+}
+
+/* ══════════════════════════════════════
+   PLAN (what hardware a model needs)
+══════════════════════════════════════ */
+let planFor = null, planSeq = 0;
+
+function openPlan(id) {
+  const m = allModels.find(x => x.id === id);
+  if (!m) return;
+  planFor = id;
+  setVal('plan-title', t('plan-title') + ': ' + m.name);
+  const native = (m.ctx_k || 8) * 1024;
+  const ctxs = [4096, 8192, 16384, 32768, 65536, 131072, 262144].filter(c => c <= native);
+  if (!ctxs.includes(native) && native < 262144) ctxs.push(native);
+  const want = m.agent_ctx || m.launch_ctx || 16384;
+  $('plan-ctx').innerHTML = ctxs.map(c => `<option value="${c}"${c === want ? ' selected' : ''}>${Math.round(c / 1024)}k</option>`).join('');
+  $('plan-quant').innerHTML = (m.all_quants || [m.quant]).map(q => `<option${q === m.quant ? ' selected' : ''}>${esc(q)}</option>`).join('');
+  $('plan-tps').value = '';
+  $('plan-modal').classList.remove('hidden');
+  loadPlan();
+}
+
+async function loadPlan() {
+  if (!planFor) return;
+  const seq = ++planSeq;
+  const tps = parseFloat($('plan-tps').value);
+  $('plan-body').innerHTML = `<p class="modal-note loading-text">${esc(t('plan-loading'))}</p>`;
+  let p;
+  try { p = await API.plan({ model_id: planFor, ctx: +$('plan-ctx').value, quant: $('plan-quant').value, target_tps: tps > 0 ? tps : null }); }
+  catch(e) { if (seq === planSeq) $('plan-body').innerHTML = `<p class="modal-note" style="color:var(--bad)">${esc(e.message)}</p>`; return; }
+  if (seq !== planSeq) return;
+  const gb = v => v ? v + ' GB' : '—';
+  const here = p.this_computer.simulated || t('plan-this-computer');
+  const paths = p.paths.map(x => `<tr>
+      <th scope="row">${esc(x.label)}</th>
+      <td>${gb(x.min_vram_gb)}<span class="sub">${esc(t('plan-rec'))} ${gb(x.rec_vram_gb)}</span></td>
+      <td>${gb(x.min_ram_gb)}<span class="sub">${esc(t('plan-rec'))} ${gb(x.rec_ram_gb)}</span></td>
+      <td>${x.cores}</td>
+      <td>~${x.tok_s} tok/s</td>
+      <td><span class="fit-label ${x.fit_here.replace(' ', '-')}">${esc(x.fit_here)}</span></td></tr>`).join('');
+  const machines = p.machines.map(x => `<div class="pm-row${x.meets_target ? ' meets' : ''}">
+      <span class="pm-name">${esc(x.label)}</span>
+      ${fitBar({ fit: x.fit, mem_pct: x.mem_pct })}
+      <span class="fit-label ${x.fit.replace(' ', '-')}">${esc(x.fit)}</span>
+      <span class="pm-tps">${x.fit === 'No Fit' ? '—' : '~' + x.tok_s + ' tok/s'}</span></div>`).join('');
+  const facts = [
+    t('plan-total', { gb: p.total_gb, w: p.weights_gb, kv: p.kv_cache_gb, ctx: Math.round(p.context / 1024) }),
+    p.parallel_sessions ? t('plan-sessions', { n: p.parallel_sessions, ctx: Math.round(p.context / 1024) }) : '',
+    p.needed_bandwidth_gbps ? t('plan-bw', { tps: p.target_tps, bw: p.needed_bandwidth_gbps, have: p.this_computer.gpu_bandwidth_gbps }) : '',
+    p.upgrade ? p.upgrade.message : '',
+  ].filter(Boolean);
+  $('plan-body').innerHTML = `
+    <ul class="plan-facts">${facts.map(f => `<li>${esc(f)}</li>`).join('')}</ul>
+    <div class="cmp-wrap"><table class="cmp-table plan-table">
+      <thead><tr><th></th><th>${esc(t('hw-form-vram'))}</th><th>${esc(t('hw-form-ram'))}</th><th>${esc(t('hw-form-cores'))}</th><th>${esc(t('stat-toks'))}</th><th>${esc(t('plan-fits-here', { here }))}</th></tr></thead>
+      <tbody>${paths}</tbody></table></div>
+    <h4 class="plan-h">${esc(t('plan-machines'))}</h4>
+    <div class="plan-machines">${machines}</div>`;
+}
+
+/* ══════════════════════════════════════
+   OTHER RUNTIMES (Ollama, LM Studio)
+══════════════════════════════════════ */
+const OTHER = { runtimes: [], matches: {} };
+async function refreshOtherRuntimes(force) {
+  try { Object.assign(OTHER, await API.otherRuntimes(force)); } catch(e) { return; }
+  if (currentMode === 'pro') applyFilters();
+}
+
+/* ══════════════════════════════════════
+   BENCHMARK (measure the running model)
+══════════════════════════════════════ */
+let benchPolling = false;
+async function startBench() {
+  try { await API.bench(); }
+  catch(e) { toast(e.message, 'error', 8000); return; }
+  toast(t('bench-started'));
+  if (benchPolling) return;
+  benchPolling = true;
+  try {
+    for (;;) {
+      await sleep(1000);
+      let st;
+      try { st = await API.benchStatus(); } catch(e) { break; }
+      $('lbar-pid').textContent = st.running ? t('bench-progress', { i: st.run || 0, n: st.runs }) : $('lbar-pid').textContent;
+      if (!st.running) {
+        if (st.stage === 'done' && st.result) {
+          toast(t('bench-done', { n: st.result.tok_s, ms: st.result.ttft_ms }), 'ok', 9000);
+          await loadModels();
+          if (currentMode === 'pro') { applyFilters(); if (selectedId) openDetail(selectedId); }
+          if (currentMode === 'library') { await loadBenchResults(); renderLibraryGrid(true); }
+        } else if (st.stage === 'failed') toast(t('bench-failed', { e: st.error }), 'error', 10000);
+        break;
+      }
+    }
+  } finally { benchPolling = false; renderLaunchBar(launchInfo); }
+}
+
+const BENCH = { byFile: {} };
+async function loadBenchResults() {
+  try {
+    const r = await API.benchResults();
+    BENCH.byFile = {};
+    for (const x of r.results) BENCH.byFile[x.filename] = x;
+  } catch(e) {}
+}
+
+/* ══════════════════════════════════════
+   STORAGE PLANNER (My models)
+══════════════════════════════════════ */
+async function runStoragePlan() {
+  const out = $('sp-result');
+  out.innerHTML = `<p class="modal-note loading-text">…</p>`;
+  try {
+    const r = await API.storagePlan({ keep: +$('sp-keep').value, selection: $('sp-sel').value,
+      os_reserve_gb: Math.max(0, +$('sp-os').value || 0), headroom_pct: Math.min(90, Math.max(0, +$('sp-head').value || 0)) });
+    const tb = v => v ? (v >= 1000 ? v / 1000 + ' TB' : v + ' GB') : '> 16 TB';
+    out.innerHTML = `
+      <div class="sp-nums"><div class="lib-num"><b>${tb(r.minimum_ssd_gb)}</b><span>${esc(t('sp-min'))}</span></div>
+        <div class="lib-num"><b>${tb(r.suggested_ssd_gb)}</b><span>${esc(t('sp-sug', { h: r.headroom_percent }))}</span></div></div>
+      <p class="sp-line">${esc(t('sp-break', { lib: r.library_gb, scratch: r.download_scratch_gb, os: r.os_reserve_gb, need: r.need_gb }))}</p>
+      <ul class="sp-models">${r.models.map(m => `<li><b>${esc(m.name)}</b> <span>${esc(m.quant)} · ${m.disk_gb} GB · ${esc(m.fit)}</span></li>`).join('')}</ul>
+      ${r.warnings.map(w => `<p class="modal-note">${esc(w)}</p>`).join('')}`;
+  } catch(e) { out.innerHTML = `<p class="modal-note" style="color:var(--bad)">${esc(e.message)}</p>`; }
+}
+
+/* ══════════════════════════════════════
    MY MODELS LIBRARY
 ══════════════════════════════════════ */
 const LIB = { disk: null, jobs: [], sig: '' };
@@ -3026,6 +3613,7 @@ function prettyName(filename) {
 function gbStr(bytes) { return (bytes / 1073741824).toFixed(bytes >= 10 * 1073741824 ? 0 : 1) + ' GB'; }
 
 async function openLibrary() {
+  loadBenchResults().then(() => renderLibraryGrid(true));
   if (!allModels.length) loadModels().then(() => renderLibraryGrid(true)).catch(() => {});
   if (!hwData) API.hardware().then(hw => { hwData = hw; }).catch(() => {});
   await refreshLibrary(true);
@@ -3154,7 +3742,7 @@ function libraryCard(x, running) {
       <div class="lib-tags">${fmt}<span class="lib-tag">${esc(x.quant || '—')}</span><span class="lib-tag">${esc(x.partial ? gbStr(x.total_bytes || x.size_bytes) : x.size)}</span>
         ${x.shards > 1 ? `<span class="lib-tag">${esc(t('tag-shards', { n: x.shards }))}</span>` : ''}${x.has_mmproj ? '<span class="lib-tag">vision</span>' : ''}</div>
     </div>
-    <div class="lib-mid">${bar}${fitLine}<div class="lib-foot">${esc(foot)}</div></div>
+    <div class="lib-mid">${bar}${fitLine}${BENCH.byFile[x.filename] ? `<div class="lib-fit"><b>${esc(t('lib-measured', { n: BENCH.byFile[x.filename].tok_s, ms: BENCH.byFile[x.filename].ttft_ms }))}</b></div>` : ''}<div class="lib-foot">${esc(foot)}</div></div>
     <div class="lib-actions"></div>`;
 
   const acts = card.querySelector('.lib-actions');
@@ -3173,6 +3761,7 @@ function libraryCard(x, running) {
       const key = settingsInfo && settingsInfo.api_key;
       if (key && navigator.clipboard) navigator.clipboard.writeText(key).then(() => toast(t('key-copied-chat'), '', 8000)).catch(() => {});
     });
+    if (ready) btn(t('btn-bench'), 'btn-secondary', e => { e.target.disabled = true; startBench(); });
     btn(t('lib-stop'), 'btn-danger', async () => { await stopModel(); refreshLibrary(true); });
   } else {
     btn(t('lib-launch'), 'btn-primary', e => libLaunch(x, e.target));

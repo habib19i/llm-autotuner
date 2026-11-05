@@ -9,6 +9,7 @@ from .model_repository import ModelEntry, QuantOption, get_models, FULL_PRECISIO
 from .benchmark_provider import Benchmarks, catalog_benchmarks, rating_to_score
 from .scoring import MemResult, agent_memory, estimate_memory, persona_score
 from .mlx_runtime import mlx_supported
+from . import bench
 
 
 class ModelRow(BaseModel):
@@ -62,6 +63,11 @@ class ModelRow(BaseModel):
     downloads: int
     agent_ctx: int = 0         # largest 32k/64k context that fits (for OpenCode); 0 = none
     agent_gpu_layers: int = 0
+    # Speed basis: "estimate", "calibrated" (scaled by this machine's benchmarks) or "measured"
+    tok_s_basis: str = "estimate"
+    measured_tok_s: Optional[float] = None
+    measured_ttft_ms: Optional[float] = None
+    measured_date: str = ""
 
 
 class RecommendationDetail(BaseModel):
@@ -165,8 +171,33 @@ def build_table(hw: Optional[HardwareProfile] = None) -> List[ModelRow]:
     for m in models:
         q, mem = pick_quant(m, hw)
         rows.append(_row(m, q, mem, benches[m.id], agent_memory(m, q, hw)))
+    if not hw.simulated:
+        apply_benchmarks(rows, hw)
     rows.sort(key=lambda r: (FIT_ORDER.get(r.fit, 9), -r.score, -r.tok_s))
     return rows
+
+
+def apply_benchmarks(rows: List[ModelRow], hw: HardwareProfile) -> None:
+    """Measured speeds on this machine replace estimates; they also calibrate the rest."""
+    results = bench.latest_by_file(hw)
+    factor = bench.calibration(hw)
+    by_model = {}
+    for r in results.values():
+        by_model.setdefault(r.get("model_id", ""), []).append(r)
+    for row in rows:
+        if row.fit == "No Fit":
+            continue
+        mine = [r for src in row.sources for r in by_model.get(src, [])]
+        exact = [r for r in mine if r.get("quant") == row.quant]
+        if exact:
+            r = exact[-1]
+            row.tok_s, row.tok_s_basis = r["tok_s"], "measured"
+            row.measured_tok_s, row.measured_ttft_ms, row.measured_date = r["tok_s"], r.get("ttft_ms"), r.get("date", "")
+        elif factor and abs(factor - 1) >= 0.05:
+            row.tok_s, row.tok_s_basis = round(row.tok_s * factor, 1), "calibrated"
+        if mine and not exact:   # benchmarked at another quant: still worth showing
+            r = mine[-1]
+            row.measured_tok_s, row.measured_ttft_ms, row.measured_date = r["tok_s"], r.get("ttft_ms"), r.get("date", "")
 
 
 def get_recommendation(model_id: str, persona: str, hw: Optional[HardwareProfile] = None) -> RecommendationDetail:

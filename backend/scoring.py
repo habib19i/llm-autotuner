@@ -10,6 +10,8 @@ from typing import Optional
 from pydantic import BaseModel
 from .hardware import HardwareProfile
 from .model_repository import ModelEntry, QuantOption
+from .profiles import gpu_bandwidth
+from .utils import get_setting
 
 # Context sizes tried when launching, largest first; the first that fits is used.
 CTX_CANDIDATES = (16384, 8192, 4096)
@@ -48,11 +50,33 @@ def kv_cache_gb(model: ModelEntry, ctx_tokens: int) -> float:
     return ctx_tokens * mb_per_token / 1024
 
 
+DEFAULT_EFFICIENCY = 0.6   # achievable fraction of peak memory bandwidth
+
+
+def efficiency() -> float:
+    """Speed tuning from Settings (llmfit's "efficiency" factor), clamped to sane values."""
+    try:
+        return min(1.0, max(0.2, float(get_setting("speed_efficiency", DEFAULT_EFFICIENCY))))
+    except (TypeError, ValueError):
+        return DEFAULT_EFFICIENCY
+
+
+def context_cap() -> int:
+    """Largest context to plan memory for (Settings); 0 = no cap."""
+    try:
+        return max(0, int(get_setting("max_context", 0) or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _bandwidths(hw: HardwareProfile):
-    """(gpu_gbps, cpu_gbps) — rough effective memory bandwidth."""
-    cpu = 45.0 if hw.physical_cores >= 6 else 30.0
+    """(gpu_gbps, cpu_gbps) — memory bandwidth: given, looked up by GPU name, or guessed."""
+    cpu = hw.cpu_bandwidth_gbps or (45.0 if hw.physical_cores >= 6 else 30.0)
     g = hw.gpu
-    if g.vendor == "Apple":
+    known = hw.gpu_bandwidth_gbps or gpu_bandwidth(f"{g.name} {hw.cpu_name if g.vendor == 'Apple' else ''}")
+    if known:
+        gpu = known
+    elif g.vendor == "Apple":
         gpu = 120.0 if g.total_vram_gb < 24 else 250.0 if g.total_vram_gb < 64 else 400.0
     elif g.integrated:
         gpu = cpu * 1.3  # shares the same DDR bus as the CPU
@@ -70,7 +94,7 @@ def _bandwidths(hw: HardwareProfile):
 def _tok_s(active_gb: float, gpu_frac: float, hw: HardwareProfile) -> float:
     """Decode speed: every token streams the active weights through memory once."""
     gpu_bw, cpu_bw = _bandwidths(hw)
-    eff = 0.6  # achievable fraction of peak bandwidth
+    eff = efficiency()
     t = active_gb * gpu_frac / (gpu_bw * eff) + active_gb * (1 - gpu_frac) / (cpu_bw * eff)
     return round(min(250.0, 1.0 / t), 1) if t > 0 else 0.0
 
@@ -141,6 +165,9 @@ AGENT_CTX_CANDIDATES = (65536, 32768)
 def agent_memory(model: ModelEntry, quant: QuantOption, hw: HardwareProfile) -> Optional[MemResult]:
     """The largest agent-sized context that still fits well, or None."""
     native = model.context_k * 1024
+    cap = context_cap()
+    if cap:
+        native = min(native, cap)
     for c in AGENT_CTX_CANDIDATES:
         if native >= c:
             r = _evaluate(model, quant, hw, c)
@@ -153,6 +180,9 @@ def estimate_memory(model: ModelEntry, quant: QuantOption, hw: HardwareProfile,
                     ctx: Optional[int] = None) -> MemResult:
     """Evaluate at the largest launch context that gives the best fit."""
     native = model.context_k * 1024
+    cap = context_cap()
+    if cap:
+        native = min(native, cap)
     if ctx:
         return _evaluate(model, quant, hw, min(ctx, native))
     best: Optional[MemResult] = None
