@@ -20,6 +20,13 @@ from .downloader import (resolve_download, start_download, all_jobs, installed_m
 from .launcher import launch, stop, status as launch_status
 from . import runtime
 from . import opencode
+from . import bench, doctor, other_runtimes
+from .api_v1 import router as api_v1_router
+from .plan import make_plan
+from .profiles import list_profiles, profile_hardware_for
+from .storage_plan import storage_plan
+from fastapi.responses import PlainTextResponse
+from .scoring import efficiency, context_cap
 from .benchmark_provider import get_arena, _refresh_in_background as refresh_arena
 from .utils import (APP_NAME, APP_VERSION, FRONTEND_DIR, LLM_PORT, get_logger, get_setting, set_setting,
                     hf_token, llm_api_key, regenerate_api_key)
@@ -45,6 +52,7 @@ app = FastAPI(
 
 # The API controls local processes and the filesystem, so it must only be reachable
 # from this machine: reject foreign Host headers (DNS rebinding) and cross-site requests.
+app.include_router(api_v1_router)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
 
 
@@ -82,6 +90,20 @@ def api_hardware():
 @app.get("/api/models")
 def api_models():
     return build_table()
+
+
+@app.get("/api/hardware/profiles")
+def api_hw_profiles():
+    """Bundled machines to simulate (Settings-free 'what would run on…')."""
+    return list_profiles()
+
+
+@app.get("/api/hardware/profiles/{profile_id}")
+def api_hw_profile(profile_id: str):
+    try:
+        return profile_hardware_for(profile_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
 
 @app.post("/api/models/override")
@@ -152,6 +174,105 @@ def api_recommend(req: RecommendReq):
         return get_recommendation(req.model_id, req.persona, _hw(req.hardware))
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+# ─── Plan, storage, benchmarks, other runtimes, diagnostics ───────────────────
+
+class PlanReq(BaseModel):
+    model_id: str = Field(..., max_length=200)
+    ctx: int = Field(16384, ge=512, le=1048576)
+    quant: Optional[str] = Field(None, max_length=40)
+    target_tps: Optional[float] = Field(None, gt=0, le=10000)
+    hardware: Optional[HardwareProfile] = None
+
+
+@app.post("/api/plan")
+def api_plan(req: PlanReq):
+    m = find_model(req.model_id)
+    if m is None:
+        raise HTTPException(404, f"Model not found: {req.model_id}")
+    try:
+        return make_plan(m, _hw(req.hardware), req.ctx, req.quant, req.target_tps)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+class StorageReq(BaseModel):
+    keep: int = Field(3, ge=1, le=100)
+    selection: str = Field("score", pattern=r"^(score|largest)$")
+    os_reserve_gb: float = Field(100.0, ge=0, le=100000)
+    scratch_gb: Optional[float] = Field(None, ge=0, le=100000)
+    headroom_pct: float = Field(15.0, ge=0, lt=100)
+    perfect_only: bool = False
+    search: str = Field("", max_length=100)
+    hardware: Optional[HardwareProfile] = None
+
+
+@app.post("/api/storage-plan")
+def api_storage_plan(req: StorageReq):
+    return storage_plan(build_table(_hw(req.hardware)), req.keep, req.selection, req.os_reserve_gb,
+                        req.scratch_gb, req.headroom_pct, req.perfect_only, req.search)
+
+
+@app.get("/api/bench")
+def api_bench_status():
+    return bench.status()
+
+
+@app.get("/api/bench/results")
+def api_bench_results():
+    hw = profile_hardware()
+    return {"calibration": bench.calibration(hw), "results": bench.for_hardware(hw)}
+
+
+@app.post("/api/bench")
+def api_bench_start():
+    """Benchmark the model that is running now."""
+    st = launch_status()
+    if not (st.running and st.ready):
+        raise HTTPException(409, "Start a model first; the benchmark measures the one that is running.")
+    hw = profile_hardware()
+    inst = next((x for x in installed_models() if x["filename"] == st.model), {})
+    model_id, quant = inst.get("model_id", ""), inst.get("quant", "")
+    est = None
+    m = find_model(model_id) if model_id else None
+    if m is not None:
+        q = next((x for x in m.quants if x.quant == quant), None)
+        if q is not None:
+            from .selector import estimate
+            est = estimate(m, q, hw).tok_s or None
+    return bench.start(st.model, model_id, quant, st.ctx, st.backend, hw, est)
+
+
+@app.delete("/api/bench/results/{filename:path}")
+def api_bench_delete(filename: str):
+    return {"removed": bench.delete(filename)}
+
+
+@app.get("/api/runtimes/others")
+def api_other_runtimes(refresh: bool = False):
+    found = other_runtimes.detect(force=refresh)
+    return {"runtimes": list(found.values()), "matches": other_runtimes.matches(get_models(), found)}
+
+
+@app.get("/api/doctor", response_class=PlainTextResponse)
+def api_doctor():
+    return doctor.report()
+
+
+class EstimatesReq(BaseModel):
+    speed_efficiency: Optional[float] = Field(None, ge=0.2, le=1.0)
+    max_context: Optional[int] = Field(None, ge=0, le=1048576)
+
+
+@app.post("/api/settings/estimates")
+def api_set_estimates(req: EstimatesReq):
+    """Advanced tuning: bandwidth efficiency for tok/s, and a cap on planned context."""
+    if req.speed_efficiency is not None:
+        set_setting("speed_efficiency", req.speed_efficiency)
+    if req.max_context is not None:
+        set_setting("max_context", req.max_context or None)
+    return _settings()
 
 
 # ─── Downloads ─────────────────────────────────────────────────────────────────
@@ -316,6 +437,7 @@ def _settings():
         "api_key_enabled": bool(key),
         "llm_base_url": f"http://127.0.0.1:{LLM_PORT}/v1",
         "mlx_supported": mlx_runtime.mlx_supported(),
+        "speed_efficiency": efficiency(), "max_context": context_cap(),
         "disk": disk_info(),
     }
 

@@ -38,6 +38,10 @@ class HardwareProfile(BaseModel):
     available_ram_gb: float
     gpu: GPUInfo
     score: float  # 0–100 system tier
+    # Set when simulating other hardware (profile or manual entry); None = estimate from the GPU name
+    gpu_bandwidth_gbps: Optional[float] = None
+    cpu_bandwidth_gbps: Optional[float] = None
+    simulated: str = ""        # label of the simulated machine, "" for this computer
 
 
 def _run(cmd, timeout: float) -> Optional[str]:
